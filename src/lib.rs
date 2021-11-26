@@ -46,9 +46,7 @@ If you are looking for a higher level solution, check out
 */
 
 #![no_std]
-
 #![doc(html_root_url = "https://docs.rs/xmlparser/0.13.4")]
-
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![allow(ellipsis_inclusive_range_patterns)]
@@ -56,7 +54,6 @@ If you are looking for a higher level solution, check out
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate std;
-
 
 macro_rules! matches {
     ($expression:expr, $($pattern:tt)+) => {
@@ -66,7 +63,6 @@ macro_rules! matches {
         }
     }
 }
-
 
 mod error;
 mod stream;
@@ -78,11 +74,10 @@ pub use crate::stream::*;
 pub use crate::strspan::*;
 pub use crate::xmlchar::*;
 
-
 /// An XML token.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum Token<'a> {
+pub enum Token {
     /// Declaration token.
     ///
     /// ```text
@@ -93,10 +88,11 @@ pub enum Token<'a> {
     /// ------------------------------------------------------- - span
     /// ```
     Declaration {
-        version: StrSpan<'a>,
-        encoding: Option<StrSpan<'a>>,
+        start: usize,
+        version: SmallDetachedStrSpan,
+        encoding: Option<SmallDetachedStrSpan>,
         standalone: Option<bool>,
-        span: StrSpan<'a>,
+        end: u32,
     },
 
     /// Processing instruction token.
@@ -108,9 +104,10 @@ pub enum Token<'a> {
     /// ------------------ - span
     /// ```
     ProcessingInstruction {
-        target: StrSpan<'a>,
-        content: Option<StrSpan<'a>>,
-        span: StrSpan<'a>,
+        start: usize,
+        end: u32,
+        target: SmallDetachedStrSpan,
+        content: Option<SmallDetachedStrSpan>,
     },
 
     /// Comment token.
@@ -121,8 +118,9 @@ pub enum Token<'a> {
     /// ------------- - span
     /// ```
     Comment {
-        text: StrSpan<'a>,
-        span: StrSpan<'a>,
+        start: usize,
+        end: u32,
+        text: DetachedStrSpan,
     },
 
     /// DOCTYPE start token.
@@ -134,9 +132,10 @@ pub enum Token<'a> {
     /// --------------------------------------- - span
     /// ```
     DtdStart {
-        name: StrSpan<'a>,
-        external_id: Option<ExternalId<'a>>,
-        span: StrSpan<'a>,
+        start: usize,
+        end: u32,
+        name: SmallDetachedStrSpan,
+        external_id: Option<ExternalId>,
     },
 
     /// Empty DOCTYPE token.
@@ -148,9 +147,10 @@ pub enum Token<'a> {
     /// -------------------------------------- - span
     /// ```
     EmptyDtd {
-        name: StrSpan<'a>,
-        external_id: Option<ExternalId<'a>>,
-        span: StrSpan<'a>,
+        start: usize,
+        end: u32,
+        name: SmallDetachedStrSpan,
+        external_id: Option<ExternalId>,
     },
 
     /// ENTITY token.
@@ -164,9 +164,10 @@ pub enum Token<'a> {
     /// ------------------------------------- - span
     /// ```
     EntityDeclaration {
-        name: StrSpan<'a>,
-        definition: EntityDefinition<'a>,
-        span: StrSpan<'a>,
+        start: usize,
+        end: u32,
+        name: SmallDetachedStrSpan,
+        definition: EntityDefinition,
     },
 
     /// DOCTYPE end token.
@@ -177,9 +178,7 @@ pub enum Token<'a> {
     /// ]>
     /// -- - span
     /// ```
-    DtdEnd {
-        span: StrSpan<'a>,
-    },
+    DtdEnd { start: usize, end: u32 },
 
     /// Element start token.
     ///
@@ -190,9 +189,10 @@ pub enum Token<'a> {
     /// --------                - span
     /// ```
     ElementStart {
-        prefix: StrSpan<'a>,
-        local: StrSpan<'a>,
-        span: StrSpan<'a>,
+        start: usize,
+        end: u32,
+        prefix: SmallDetachedStrSpan,
+        local: SmallDetachedStrSpan,
     },
 
     /// Attribute token.
@@ -205,10 +205,11 @@ pub enum Token<'a> {
     ///       --------------- - span
     /// ```
     Attribute {
-        prefix: StrSpan<'a>,
-        local: StrSpan<'a>,
-        value: StrSpan<'a>,
-        span: StrSpan<'a>,
+        start: usize,
+        end: u32,
+        prefix: SmallDetachedStrSpan,
+        local: SmallDetachedStrSpan,
+        value: SmallDetachedStrSpan,
     },
 
     /// Element end token.
@@ -231,8 +232,9 @@ pub enum Token<'a> {
     ///         --              - span
     /// ```
     ElementEnd {
-        end: ElementEnd<'a>,
-        span: StrSpan<'a>,
+        start: usize,
+        end: u32,
+        el_end: ElementEnd,
     },
 
     /// Text token.
@@ -248,7 +250,9 @@ pub enum Token<'a> {
     ///
     /// The token span is equal to the `text`.
     Text {
-        text: StrSpan<'a>,
+        start: usize,
+        end: u32,
+        text: DetachedStrSpan,
     },
 
     /// CDATA token.
@@ -259,45 +263,41 @@ pub enum Token<'a> {
     ///    ----------------     - span
     /// ```
     Cdata {
-        text: StrSpan<'a>,
-        span: StrSpan<'a>,
+        start: usize,
+        end: u32,
+        text: DetachedStrSpan,
     },
 }
 
-
 /// `ElementEnd` token.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum ElementEnd<'a> {
+pub enum ElementEnd {
     /// Indicates `>`
     Open,
     /// Indicates `</name>`
-    Close(StrSpan<'a>, StrSpan<'a>),
+    Close(SmallDetachedStrSpan, SmallDetachedStrSpan),
     /// Indicates `/>`
     Empty,
 }
 
-
 /// Representation of the [ExternalID](https://www.w3.org/TR/xml/#NT-ExternalID) value.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum ExternalId<'a> {
-    System(StrSpan<'a>),
-    Public(StrSpan<'a>, StrSpan<'a>),
+pub enum ExternalId {
+    System(SmallDetachedStrSpan),
+    Public(SmallDetachedStrSpan, SmallDetachedStrSpan),
 }
-
 
 /// Representation of the [EntityDef](https://www.w3.org/TR/xml/#NT-EntityDef) value.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum EntityDefinition<'a> {
-    EntityValue(StrSpan<'a>),
-    ExternalId(ExternalId<'a>),
+pub enum EntityDefinition {
+    EntityValue(SmallDetachedStrSpan),
+    ExternalId(ExternalId),
 }
-
 
 type Result<T> = core::result::Result<T, Error>;
 type StreamResult<T> = core::result::Result<T, StreamError>;
-
 
 #[derive(Clone, Copy, PartialEq)]
 enum State {
@@ -310,7 +310,6 @@ enum State {
     AfterElements,
     End,
 }
-
 
 /// Tokenizer for the XML structure.
 pub struct Tokenizer<'a> {
@@ -339,14 +338,11 @@ impl<'a> From<&'a str> for Tokenizer<'a> {
     }
 }
 
-
 macro_rules! map_err_at {
     ($fun:expr, $stream:expr, $err:ident) => {{
         let start = $stream.pos();
-        $fun.map_err(|e|
-            Error::$err(e, $stream.gen_text_pos_from(start))
-        )
-    }}
+        $fun.map_err(|e| Error::$err(e, $stream.gen_text_pos_from(start)))
+    }};
 }
 
 impl<'a> Tokenizer<'a> {
@@ -365,7 +361,7 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn parse_next_impl(&mut self) -> Option<Result<Token<'a>>> {
+    fn parse_next_impl(&mut self) -> Option<Result<Token>> {
         let s = &mut self.stream;
 
         if s.at_end() {
@@ -428,7 +424,10 @@ impl<'a> Tokenizer<'a> {
                         Ok(b'>') => {
                             self.state = State::AfterDtd;
                             s.advance(1);
-                            Some(Ok(Token::DtdEnd { span: s.slice_back(start) }))
+                            Some(Ok(Token::DtdEnd {
+                                start,
+                                end: (s.pos() - start) as u32,
+                            }))
                         }
                         Ok(c) => {
                             let e = StreamError::InvalidChar(c, b'>', s.gen_text_pos());
@@ -442,9 +441,9 @@ impl<'a> Tokenizer<'a> {
                 } else if s.starts_with_space() {
                     s.skip_spaces();
                     self.parse_next_impl()
-                } else if    s.starts_with(b"<!ELEMENT")
-                          || s.starts_with(b"<!ATTLIST")
-                          || s.starts_with(b"<!NOTATION")
+                } else if s.starts_with(b"<!ELEMENT")
+                    || s.starts_with(b"<!ATTLIST")
+                    || s.starts_with(b"<!NOTATION")
                 {
                     if Self::consume_decl(s).is_err() {
                         let pos = s.gen_text_pos_from(start);
@@ -480,59 +479,53 @@ impl<'a> Tokenizer<'a> {
             State::Elements => {
                 // Use `match` only here, because only this section is performance-critical.
                 match s.curr_byte() {
-                    Ok(b'<') => {
-                        match s.next_byte() {
-                            Ok(b'!') => {
-                                if s.starts_with(b"<!--") {
-                                    Some(Self::parse_comment(s))
-                                } else if s.starts_with(b"<![CDATA[") {
-                                    Some(Self::parse_cdata(s))
-                                } else {
-                                    Some(Err(Error::UnknownToken(s.gen_text_pos())))
-                                }
-                            }
-                            Ok(b'?') => {
-                                if !s.starts_with(b"<?xml ") {
-                                    Some(Self::parse_pi(s))
-                                } else {
-                                    Some(Err(Error::UnknownToken(s.gen_text_pos())))
-                                }
-                            }
-                            Ok(b'/') => {
-                                if self.depth > 0 {
-                                    self.depth -= 1;
-                                }
-
-                                if self.depth == 0 && !self.fragment_parsing {
-                                    self.state = State::AfterElements;
-                                } else {
-                                    self.state = State::Elements;
-                                }
-
-                                Some(Self::parse_close_element(s))
-                            }
-                            Ok(_) => {
-                                self.state = State::Attributes;
-                                Some(Self::parse_element_start(s))
-                            }
-                            Err(_) => {
-                                return Some(Err(Error::UnknownToken(s.gen_text_pos())));
+                    Ok(b'<') => match s.next_byte() {
+                        Ok(b'!') => {
+                            if s.starts_with(b"<!--") {
+                                Some(Self::parse_comment(s))
+                            } else if s.starts_with(b"<![CDATA[") {
+                                Some(Self::parse_cdata(s))
+                            } else {
+                                Some(Err(Error::UnknownToken(s.gen_text_pos())))
                             }
                         }
-                    }
-                    Ok(_) => {
-                        Some(Self::parse_text(s))
-                    }
-                    Err(_) => {
-                        Some(Err(Error::UnknownToken(s.gen_text_pos())))
-                    }
+                        Ok(b'?') => {
+                            if !s.starts_with(b"<?xml ") {
+                                Some(Self::parse_pi(s))
+                            } else {
+                                Some(Err(Error::UnknownToken(s.gen_text_pos())))
+                            }
+                        }
+                        Ok(b'/') => {
+                            if self.depth > 0 {
+                                self.depth -= 1;
+                            }
+
+                            if self.depth == 0 && !self.fragment_parsing {
+                                self.state = State::AfterElements;
+                            } else {
+                                self.state = State::Elements;
+                            }
+
+                            Some(Self::parse_close_element(s))
+                        }
+                        Ok(_) => {
+                            self.state = State::Attributes;
+                            Some(Self::parse_element_start(s))
+                        }
+                        Err(_) => {
+                            return Some(Err(Error::UnknownToken(s.gen_text_pos())));
+                        }
+                    },
+                    Ok(_) => Some(Self::parse_text(s)),
+                    Err(_) => Some(Err(Error::UnknownToken(s.gen_text_pos()))),
                 }
             }
             State::Attributes => {
                 let t = Self::parse_attribute(s);
 
-                if let Ok(Token::ElementEnd { end, .. }) = t {
-                    if end == ElementEnd::Open {
+                if let Ok(Token::ElementEnd { el_end, .. }) = t {
+                    if el_end == ElementEnd::Open {
                         self.depth += 1;
                     }
 
@@ -561,23 +554,24 @@ impl<'a> Tokenizer<'a> {
                     Some(Err(Error::UnknownToken(s.gen_text_pos())))
                 }
             }
-            State::End => {
-                None
-            }
+            State::End => None,
         }
     }
 
-    fn parse_declaration(s: &mut Stream<'a>) -> Result<Token<'a>> {
+    fn parse_declaration(s: &mut Stream<'a>) -> Result<Token> {
         map_err_at!(Self::parse_declaration_impl(s), s, InvalidDeclaration)
     }
 
     // XMLDecl ::= '<?xml' VersionInfo EncodingDecl? SDDecl? S? '?>'
-    fn parse_declaration_impl(s: &mut Stream<'a>) -> StreamResult<Token<'a>> {
+    fn parse_declaration_impl(s: &mut Stream<'a>) -> StreamResult<Token> {
         fn consume_spaces(s: &mut Stream) -> StreamResult<()> {
             if s.starts_with_space() {
                 s.skip_spaces();
             } else if !s.starts_with(b"?>") && !s.at_end() {
-                return Err(StreamError::InvalidSpace(s.curr_byte_unchecked(), s.gen_text_pos()));
+                return Err(StreamError::InvalidSpace(
+                    s.curr_byte_unchecked(),
+                    s.gen_text_pos(),
+                ));
             }
 
             Ok(())
@@ -599,8 +593,13 @@ impl<'a> Tokenizer<'a> {
         s.skip_spaces();
         s.skip_string(b"?>")?;
 
-        let span = s.slice_back(start);
-        Ok(Token::Declaration { version, encoding, standalone, span })
+        Ok(Token::Declaration {
+            start,
+            version: version.detach_small(start),
+            encoding: encoding.map(|e| e.detach_small(start)),
+            standalone,
+            end: (s.pos() - start) as u32,
+        })
     }
 
     // VersionInfo ::= S 'version' Eq ("'" VersionNum "'" | '"' VersionNum '"')
@@ -634,11 +633,7 @@ impl<'a> Tokenizer<'a> {
         // [A-Za-z] ([A-Za-z0-9._] | '-')*
         // TODO: check that first byte is [A-Za-z]
         let name = s.consume_bytes(|_, c| {
-               c.is_xml_letter()
-            || c.is_xml_digit()
-            || c == b'.'
-            || c == b'-'
-            || c == b'_'
+            c.is_xml_letter() || c.is_xml_digit() || c == b'.' || c == b'-' || c == b'_'
         });
         s.consume_byte(quote)?;
 
@@ -673,14 +668,14 @@ impl<'a> Tokenizer<'a> {
         Ok(Some(flag))
     }
 
-    fn parse_comment(s: &mut Stream<'a>) -> Result<Token<'a>> {
+    fn parse_comment(s: &mut Stream<'a>) -> Result<Token> {
         let start = s.pos();
         Self::parse_comment_impl(s)
             .map_err(|e| Error::InvalidComment(e, s.gen_text_pos_from(start)))
     }
 
     // '<!--' ((Char - '-') | ('-' (Char - '-')))* '-->'
-    fn parse_comment_impl(s: &mut Stream<'a>) -> StreamResult<Token<'a>> {
+    fn parse_comment_impl(s: &mut Stream<'a>) -> StreamResult<Token> {
         let start = s.pos();
         s.advance(4);
         let text = s.consume_chars(|s, c| !(c == '-' && s.starts_with(b"-->")))?;
@@ -694,18 +689,20 @@ impl<'a> Tokenizer<'a> {
             return Err(StreamError::InvalidCommentEnd);
         }
 
-        let span = s.slice_back(start);
-
-        Ok(Token::Comment { text, span })
+        Ok(Token::Comment {
+            start,
+            end: (s.pos() - start) as u32,
+            text: text.detach(start),
+        })
     }
 
-    fn parse_pi(s: &mut Stream<'a>) -> Result<Token<'a>> {
+    fn parse_pi(s: &mut Stream<'a>) -> Result<Token> {
         map_err_at!(Self::parse_pi_impl(s), s, InvalidPI)
     }
 
     // PI       ::= '<?' PITarget (S (Char* - (Char* '?>' Char*)))? '?>'
     // PITarget ::= Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'))
-    fn parse_pi_impl(s: &mut Stream<'a>) -> StreamResult<Token<'a>> {
+    fn parse_pi_impl(s: &mut Stream<'a>) -> StreamResult<Token> {
         let start = s.pos();
         s.advance(2);
         let target = s.consume_name()?;
@@ -719,17 +716,20 @@ impl<'a> Tokenizer<'a> {
 
         s.skip_string(b"?>")?;
 
-        let span = s.slice_back(start);
-
-        Ok(Token::ProcessingInstruction { target, content, span })
+        Ok(Token::ProcessingInstruction {
+            start,
+            end: (s.pos() - start) as u32,
+            target: target.detach_small(start),
+            content: content.map(|c| c.detach_small(start)),
+        })
     }
 
-    fn parse_doctype(s: &mut Stream<'a>) -> Result<Token<'a>> {
+    fn parse_doctype(s: &mut Stream<'a>) -> Result<Token> {
         map_err_at!(Self::parse_doctype_impl(s), s, InvalidDoctype)
     }
 
     // doctypedecl ::= '<!DOCTYPE' S Name (S ExternalID)? S? ('[' intSubset ']' S?)? '>'
-    fn parse_doctype_impl(s: &mut Stream<'a>) -> StreamResult<Token<'a>> {
+    fn parse_doctype_impl(s: &mut Stream<'a>) -> StreamResult<Token> {
         let start = s.pos();
         s.advance(9);
 
@@ -737,31 +737,44 @@ impl<'a> Tokenizer<'a> {
         let name = s.consume_name()?;
         s.skip_spaces();
 
-        let external_id = Self::parse_external_id(s)?;
+        let external_id = Self::parse_external_id(s, start)?;
         s.skip_spaces();
 
         let c = s.curr_byte()?;
-        if c != b'[' && c !=  b'>' {
+        if c != b'[' && c != b'>' {
             static EXPECTED: &[u8] = &[b'[', b'>'];
-            return Err(StreamError::InvalidCharMultiple(c, EXPECTED, s.gen_text_pos()));
+            return Err(StreamError::InvalidCharMultiple(
+                c,
+                EXPECTED,
+                s.gen_text_pos(),
+            ));
         }
 
         s.advance(1);
 
-        let span = s.slice_back(start);
         if c == b'[' {
-            Ok(Token::DtdStart { name, external_id, span })
+            Ok(Token::DtdStart {
+                start,
+                end: (s.pos() - start) as u32,
+                name: name.detach_small(start),
+                external_id,
+            })
         } else {
-            Ok(Token::EmptyDtd { name, external_id, span })
+            Ok(Token::EmptyDtd {
+                start,
+                end: (s.pos() - start) as u32,
+                name: name.detach_small(start),
+                external_id,
+            })
         }
     }
 
     // ExternalID ::= 'SYSTEM' S SystemLiteral | 'PUBLIC' S PubidLiteral S SystemLiteral
-    fn parse_external_id(s: &mut Stream<'a>) -> StreamResult<Option<ExternalId<'a>>> {
+    fn parse_external_id(s: &mut Stream<'a>, start: usize) -> StreamResult<Option<ExternalId>> {
         let v = if s.starts_with(b"SYSTEM") || s.starts_with(b"PUBLIC") {
-            let start = s.pos();
+            let local_start = s.pos();
             s.advance(6);
-            let id = s.slice_back(start);
+            let id = s.slice_back(local_start);
 
             s.consume_spaces()?;
             let quote = s.consume_quote()?;
@@ -769,14 +782,14 @@ impl<'a> Tokenizer<'a> {
             s.consume_byte(quote)?;
 
             let v = if id.as_str() == "SYSTEM" {
-                ExternalId::System(literal1)
+                ExternalId::System(literal1.detach_small(start))
             } else {
                 s.consume_spaces()?;
                 let quote = s.consume_quote()?;
                 let literal2 = s.consume_bytes(|_, c| c != quote);
                 s.consume_byte(quote)?;
 
-                ExternalId::Public(literal1, literal2)
+                ExternalId::Public(literal1.detach_small(start), literal2.detach_small(start))
             };
 
             Some(v)
@@ -787,14 +800,14 @@ impl<'a> Tokenizer<'a> {
         Ok(v)
     }
 
-    fn parse_entity_decl(s: &mut Stream<'a>) -> Result<Token<'a>> {
+    fn parse_entity_decl(s: &mut Stream<'a>) -> Result<Token> {
         map_err_at!(Self::parse_entity_decl_impl(s), s, InvalidEntity)
     }
 
     // EntityDecl  ::= GEDecl | PEDecl
     // GEDecl      ::= '<!ENTITY' S Name S EntityDef S? '>'
     // PEDecl      ::= '<!ENTITY' S '%' S Name S PEDef S? '>'
-    fn parse_entity_decl_impl(s: &mut Stream<'a>) -> StreamResult<Token<'a>> {
+    fn parse_entity_decl_impl(s: &mut Stream<'a>) -> StreamResult<Token> {
         let start = s.pos();
         s.advance(8);
 
@@ -809,13 +822,16 @@ impl<'a> Tokenizer<'a> {
 
         let name = s.consume_name()?;
         s.consume_spaces()?;
-        let definition = Self::parse_entity_def(s, is_ge)?;
+        let definition = Self::parse_entity_def(s, is_ge, start)?;
         s.skip_spaces();
         s.consume_byte(b'>')?;
 
-        let span = s.slice_back(start);
-
-        Ok(Token::EntityDeclaration { name, definition, span })
+        Ok(Token::EntityDeclaration {
+            start,
+            end: (s.pos() - start) as u32,
+            name: name.detach_small(start),
+            definition,
+        })
     }
 
     // EntityDef   ::= EntityValue | (ExternalID NDataDecl?)
@@ -824,7 +840,11 @@ impl<'a> Tokenizer<'a> {
     //                             | PEReference | Reference)* "'"
     // ExternalID  ::= 'SYSTEM' S SystemLiteral | 'PUBLIC' S PubidLiteral S SystemLiteral
     // NDataDecl   ::= S 'NDATA' S Name
-    fn parse_entity_def(s: &mut Stream<'a>, is_ge: bool) -> StreamResult<EntityDefinition<'a>> {
+    fn parse_entity_def(
+        s: &mut Stream<'a>,
+        is_ge: bool,
+        start: usize,
+    ) -> StreamResult<EntityDefinition> {
         let c = s.curr_byte()?;
         match c {
             b'"' | b'\'' => {
@@ -832,10 +852,10 @@ impl<'a> Tokenizer<'a> {
                 let value = s.consume_bytes(|_, c| c != quote);
                 s.consume_byte(quote)?;
 
-                Ok(EntityDefinition::EntityValue(value))
+                Ok(EntityDefinition::EntityValue(value.detach_small(start)))
             }
             b'S' | b'P' => {
-                if let Some(id) = Self::parse_external_id(s)? {
+                if let Some(id) = Self::parse_external_id(s, start)? {
                     if is_ge {
                         s.skip_spaces();
                         if s.starts_with(b"NDATA") {
@@ -865,7 +885,7 @@ impl<'a> Tokenizer<'a> {
         Ok(())
     }
 
-    fn parse_cdata(s: &mut Stream<'a>) -> Result<Token<'a>> {
+    fn parse_cdata(s: &mut Stream<'a>) -> Result<Token> {
         map_err_at!(Self::parse_cdata_impl(s), s, InvalidCdata)
     }
 
@@ -873,49 +893,56 @@ impl<'a> Tokenizer<'a> {
     // CDStart ::= '<![CDATA['
     // CData   ::= (Char* - (Char* ']]>' Char*))
     // CDEnd   ::= ']]>'
-    fn parse_cdata_impl(s: &mut Stream<'a>) -> StreamResult<Token<'a>> {
+    fn parse_cdata_impl(s: &mut Stream<'a>) -> StreamResult<Token> {
         let start = s.pos();
         s.advance(9);
         let text = s.consume_chars(|s, c| !(c == ']' && s.starts_with(b"]]>")))?;
         s.skip_string(b"]]>")?;
-        let span = s.slice_back(start);
-        Ok(Token::Cdata { text, span })
+        Ok(Token::Cdata {
+            start,
+            end: (s.pos() - start) as u32,
+            text: text.detach(start),
+        })
     }
 
-    fn parse_element_start(s: &mut Stream<'a>) -> Result<Token<'a>> {
+    fn parse_element_start(s: &mut Stream<'a>) -> Result<Token> {
         map_err_at!(Self::parse_element_start_impl(s), s, InvalidElement)
     }
 
     // '<' Name (S Attribute)* S? '>'
-    fn parse_element_start_impl(s: &mut Stream<'a>) -> StreamResult<Token<'a>> {
+    fn parse_element_start_impl(s: &mut Stream<'a>) -> StreamResult<Token> {
         let start = s.pos();
         s.advance(1);
         let (prefix, local) = s.consume_qname()?;
-        let span = s.slice_back(start);
-
-        Ok(Token::ElementStart { prefix, local, span })
+        Ok(Token::ElementStart {
+            start,
+            end: (s.pos() - start) as u32,
+            prefix: prefix.detach_small(start),
+            local: local.detach_small(start),
+        })
     }
 
-    fn parse_close_element(s: &mut Stream<'a>) -> Result<Token<'a>> {
+    fn parse_close_element(s: &mut Stream<'a>) -> Result<Token> {
         map_err_at!(Self::parse_close_element_impl(s), s, InvalidElement)
     }
 
     // '</' Name S? '>'
-    fn parse_close_element_impl(s: &mut Stream<'a>) -> StreamResult<Token<'a>> {
+    fn parse_close_element_impl(s: &mut Stream<'a>) -> StreamResult<Token> {
         let start = s.pos();
         s.advance(2);
 
         let (prefix, tag_name) = s.consume_qname()?;
         s.skip_spaces();
         s.consume_byte(b'>')?;
-
-        let span = s.slice_back(start);
-
-        Ok(Token::ElementEnd { end: ElementEnd::Close(prefix, tag_name), span })
+        Ok(Token::ElementEnd {
+            start,
+            end: (s.pos() - start) as u32,
+            el_end: ElementEnd::Close(prefix.detach_small(0), tag_name.detach_small(0)),
+        })
     }
 
     // Name Eq AttValue
-    fn parse_attribute(s: &mut Stream<'a>) -> StreamResult<Token<'a>> {
+    fn parse_attribute(s: &mut Stream<'a>) -> StreamResult<Token> {
         let attr_start = s.pos();
         let has_space = s.starts_with_space();
         s.skip_spaces();
@@ -927,26 +954,33 @@ impl<'a> Tokenizer<'a> {
                 b'/' => {
                     s.advance(1);
                     s.consume_byte(b'>')?;
-                    let span = s.slice_back(start);
-                    return Ok(Token::ElementEnd { end: ElementEnd::Empty, span });
+                    return Ok(Token::ElementEnd {
+                        start,
+                        end: (s.pos() - start) as u32,
+                        el_end: ElementEnd::Empty,
+                    });
                 }
                 b'>' => {
                     s.advance(1);
-                    let span = s.slice_back(start);
-                    return Ok(Token::ElementEnd { end: ElementEnd::Open, span });
+                    return Ok(Token::ElementEnd {
+                        start,
+                        end: (s.pos() - start) as u32,
+                        el_end: ElementEnd::Open,
+                    });
                 }
                 _ => {}
             }
         }
 
         if !has_space {
-            if !s.at_end() {
-                return Err(StreamError::InvalidSpace(
-                    s.curr_byte_unchecked(), s.gen_text_pos_from(attr_start))
-                );
+            return if !s.at_end() {
+                Err(StreamError::InvalidSpace(
+                    s.curr_byte_unchecked(),
+                    s.gen_text_pos_from(attr_start),
+                ))
             } else {
-                return Err(StreamError::UnexpectedEndOfStream);
-            }
+                Err(StreamError::UnexpectedEndOfStream)
+            };
         }
 
         let start = s.pos();
@@ -958,16 +992,22 @@ impl<'a> Tokenizer<'a> {
         // The attribute value must not contain the < character.
         let value = s.consume_chars(|_, c| c != quote_c && c != '<')?;
         s.consume_byte(quote)?;
-        let span = s.slice_back(start);
 
-        Ok(Token::Attribute { prefix, local, value, span })
+        Ok(Token::Attribute {
+            start,
+            end: (s.pos() - start) as u32,
+            prefix: prefix.detach_small(start),
+            local: local.detach_small(start),
+            value: value.detach_small(start),
+        })
     }
 
-    fn parse_text(s: &mut Stream<'a>) -> Result<Token<'a>> {
+    fn parse_text(s: &mut Stream<'a>) -> Result<Token> {
         map_err_at!(Self::parse_text_impl(s), s, InvalidCharData)
     }
 
-    fn parse_text_impl(s: &mut Stream<'a>) -> StreamResult<Token<'a>> {
+    fn parse_text_impl(s: &mut Stream<'a>) -> StreamResult<Token> {
+        let start = s.pos();
         let text = s.consume_chars(|_, c| c != '<')?;
 
         // According to the spec, `]]>` must not appear inside a Text node.
@@ -980,12 +1020,16 @@ impl<'a> Tokenizer<'a> {
             }
         }
 
-        Ok(Token::Text { text })
+        Ok(Token::Text {
+            start,
+            end: (s.pos() - start) as u32,
+            text: text.detach(start),
+        })
     }
 }
 
 impl<'a> Iterator for Tokenizer<'a> {
-    type Item = Result<Token<'a>>;
+    type Item = Result<Token>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {

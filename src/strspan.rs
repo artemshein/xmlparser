@@ -1,6 +1,53 @@
 use core::fmt;
 use core::ops::{Deref, Range};
 
+/// A string slice, holding offsets only.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct DetachedStrSpan {
+    start: u32,
+    end: u32,
+}
+
+impl DetachedStrSpan {
+    /// Slice the string using this span
+    pub fn as_str<'a>(&self, s: &'a str, offset: usize) -> &'a str {
+        &s[offset + self.start as usize..offset + self.end as usize]
+    }
+
+    /// Start offset
+    pub fn start(&self) -> u32 {
+        self.start
+    }
+
+    /// End offset
+    pub fn end(&self) -> u32 {
+        self.end
+    }
+}
+
+/// A string slice, holding offsets only.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct SmallDetachedStrSpan {
+    start: u16,
+    end: u16,
+}
+
+impl SmallDetachedStrSpan {
+    /// Slice the string using this span
+    pub fn as_str<'a>(&self, s: &'a str, offset: usize) -> &'a str {
+        &s[offset + self.start as usize..offset + self.end as usize]
+    }
+
+    /// Start offset
+    pub fn start(&self) -> u16 {
+        self.start
+    }
+
+    /// End offset
+    pub fn end(&self) -> u16 {
+        self.end
+    }
+}
 
 /// A string slice.
 ///
@@ -16,10 +63,7 @@ pub struct StrSpan<'a> {
 impl<'a> From<&'a str> for StrSpan<'a> {
     #[inline]
     fn from(text: &'a str) -> Self {
-        StrSpan {
-            text,
-            start: 0,
-        }
+        StrSpan { text, start: 0 }
     }
 }
 
@@ -28,7 +72,36 @@ impl<'a> StrSpan<'a> {
     #[inline]
     pub(crate) fn from_substr(text: &str, start: usize, end: usize) -> StrSpan {
         debug_assert!(start <= end);
-        StrSpan { text: &text[start..end], start }
+        StrSpan {
+            text: &text[start..end],
+            start,
+        }
+    }
+
+    /// Make a detached span for span
+    pub fn detach(&self, offset: usize) -> DetachedStrSpan {
+        if self.start == self.end() {
+            return DetachedStrSpan { start: 0, end: 0 };
+        }
+        debug_assert!(offset <= self.start);
+        debug_assert!(self.end() >= self.start);
+        DetachedStrSpan {
+            start: (self.start - offset) as u32,
+            end: (self.end() - offset) as u32,
+        }
+    }
+
+    /// Make a detached span for span
+    pub fn detach_small(&self, offset: usize) -> SmallDetachedStrSpan {
+        if self.start == self.end() {
+            return SmallDetachedStrSpan { start: 0, end: 0 };
+        }
+        debug_assert!(offset <= self.start);
+        debug_assert!(self.end() >= self.start);
+        SmallDetachedStrSpan {
+            start: (self.start - offset) as u16,
+            end: (self.end() - offset) as u16,
+        }
     }
 
     /// Returns the start position of the span.
@@ -64,7 +137,13 @@ impl<'a> StrSpan<'a> {
 
 impl<'a> fmt::Debug for StrSpan<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "StrSpan({:?} {}..{})", self.as_str(), self.start(), self.end())
+        write!(
+            f,
+            "StrSpan({:?} {}..{})",
+            self.as_str(),
+            self.start(),
+            self.end()
+        )
     }
 }
 
