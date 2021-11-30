@@ -33,6 +33,16 @@ pub struct SmallDetachedStrSpan {
 }
 
 impl SmallDetachedStrSpan {
+    /// Make an empty SmallDetachedStrSpan
+    pub fn empty() -> Self {
+        Self { start: 0, end: 0 }
+    }
+
+    /// Is empty
+    pub fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
+
     /// Slice the string using this span
     pub fn as_str<'a>(&self, s: &'a str, offset: usize) -> &'a str {
         &s[offset + self.start as usize..offset + self.end as usize]

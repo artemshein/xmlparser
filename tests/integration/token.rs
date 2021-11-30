@@ -63,7 +63,11 @@ pub fn to_test_token(token: Result<xml::Token, xml::Error>, text: &str) -> Token
             end,
         }) => Token::Declaration(
             version.as_str(text, start),
-            encoding.map(|v| v.as_str(text, start)),
+            if encoding.is_empty() {
+                None
+            } else {
+                Some(encoding.as_str(text, start))
+            },
             standalone,
             start..start + end as usize,
         ),
@@ -74,7 +78,11 @@ pub fn to_test_token(token: Result<xml::Token, xml::Error>, text: &str) -> Token
             content,
         }) => Token::PI(
             target.as_str(text, start),
-            content.map(|v| v.as_str(text, start)),
+            if content.is_empty() {
+                None
+            } else {
+                Some(content.as_str(text, start))
+            },
             start..start + end as usize,
         ),
         Ok(xml::Token::Comment {
@@ -82,41 +90,107 @@ pub fn to_test_token(token: Result<xml::Token, xml::Error>, text: &str) -> Token
             end,
             text: text_,
         }) => Token::Comment(text_.as_str(text, start), start..start + end as usize),
-        Ok(xml::Token::DtdStart {
+        Ok(xml::Token::DtdStartNoExternalId { start, end, name }) => {
+            Token::DtdStart(name.as_str(text, start), None, start..start + end as usize)
+        }
+        Ok(xml::Token::DtdStartSystemExternalId {
             start,
             end,
             name,
             external_id,
         }) => Token::DtdStart(
             name.as_str(text, start),
-            external_id.map(|v| to_test_external_id(v, text, start)),
+            Some(to_test_external_id(
+                xml::ExternalId::System(external_id),
+                text,
+                start,
+            )),
             start..start + end as usize,
         ),
-        Ok(xml::Token::EmptyDtd {
+        Ok(xml::Token::DtdStartPublicExternalId {
+            start,
+            end,
+            name,
+            public1,
+            public2,
+        }) => Token::DtdStart(
+            name.as_str(text, start),
+            Some(to_test_external_id(
+                xml::ExternalId::Public(public1, public2),
+                text,
+                start,
+            )),
+            start..start + end as usize,
+        ),
+        Ok(xml::Token::EmptyDtdNoExternalId { start, end, name }) => {
+            Token::EmptyDtd(name.as_str(text, start), None, start..start + end as usize)
+        }
+        Ok(xml::Token::EmptyDtdSystemExternalId {
             start,
             end,
             name,
             external_id,
         }) => Token::EmptyDtd(
             name.as_str(text, start),
-            external_id.map(|v| to_test_external_id(v, text, start)),
+            Some(to_test_external_id(
+                xml::ExternalId::System(external_id),
+                text,
+                start,
+            )),
             start..start + end as usize,
         ),
-        Ok(xml::Token::EntityDeclaration {
+        Ok(xml::Token::EmptyDtdPublicExternalId {
             start,
             end,
             name,
-            definition,
+            public1,
+            public2,
+        }) => Token::EmptyDtd(
+            name.as_str(text, start),
+            Some(to_test_external_id(
+                xml::ExternalId::Public(public1, public2),
+                text,
+                start,
+            )),
+            start..start + end as usize,
+        ),
+        Ok(xml::Token::EntityDeclarationEntityValue {
+            start,
+            end,
+            name,
+            entity_value,
         }) => Token::EntityDecl(
             name.as_str(text, start),
-            match definition {
-                xml::EntityDefinition::EntityValue(name) => {
-                    EntityDefinition::EntityValue(name.as_str(text, start))
-                }
-                xml::EntityDefinition::ExternalId(id) => {
-                    EntityDefinition::ExternalId(to_test_external_id(id, text, start))
-                }
-            },
+            EntityDefinition::EntityValue(entity_value.as_str(text, start)),
+            start..start + end as usize,
+        ),
+        Ok(xml::Token::EntityDeclarationSystemExternalId {
+            start,
+            end,
+            name,
+            external_id,
+        }) => Token::EntityDecl(
+            name.as_str(text, start),
+            EntityDefinition::ExternalId(to_test_external_id(
+                xml::ExternalId::System(external_id),
+                text,
+                start,
+            )),
+            start..start + end as usize,
+        ),
+        Ok(xml::Token::EntityDeclarationPublicExternalId {
+            start,
+            end,
+            name,
+            public1,
+            public2,
+        }) => Token::EntityDecl(
+            name.as_str(text, start),
+            EntityDefinition::ExternalId(to_test_external_id(
+                xml::ExternalId::Public(public1, public2),
+                text,
+                start,
+            )),
             start..start + end as usize,
         ),
         Ok(xml::Token::DtdEnd { start, end }) => Token::DtdEnd(start..start + end as usize),

@@ -90,9 +90,9 @@ pub enum Token {
     Declaration {
         start: usize,
         version: SmallDetachedStrSpan,
-        encoding: Option<SmallDetachedStrSpan>,
+        encoding: SmallDetachedStrSpan,
         standalone: Option<bool>,
-        end: u32,
+        end: u16,
     },
 
     /// Processing instruction token.
@@ -105,9 +105,9 @@ pub enum Token {
     /// ```
     ProcessingInstruction {
         start: usize,
-        end: u32,
+        end: u16,
         target: SmallDetachedStrSpan,
-        content: Option<SmallDetachedStrSpan>,
+        content: SmallDetachedStrSpan,
     },
 
     /// Comment token.
@@ -126,16 +126,45 @@ pub enum Token {
     /// DOCTYPE start token.
     ///
     /// ```text
-    /// <!DOCTYPE greeting SYSTEM "hello.dtd" [
+    /// <!DOCTYPE greeting [
     ///           --------                      - name
-    ///                    ------------------   - external_id?
     /// --------------------------------------- - span
     /// ```
-    DtdStart {
+    DtdStartNoExternalId {
         start: usize,
-        end: u32,
+        end: u16,
         name: SmallDetachedStrSpan,
-        external_id: Option<ExternalId>,
+    },
+
+    /// DOCTYPE start token.
+    ///
+    /// ```text
+    /// <!DOCTYPE greeting SYSTEM "hello.dtd" [
+    ///           --------                      - name
+    ///                    ------------------   - external_id
+    /// --------------------------------------- - span
+    /// ```
+    DtdStartSystemExternalId {
+        start: usize,
+        end: u16,
+        name: SmallDetachedStrSpan,
+        external_id: SmallDetachedStrSpan,
+    },
+
+    /// DOCTYPE start token.
+    ///
+    /// ```text
+    /// <!DOCTYPE greeting PUBLIC "hello.dtd" [
+    ///           --------                      - name
+    ///                    ------------------   - external_id
+    /// --------------------------------------- - span
+    /// ```
+    DtdStartPublicExternalId {
+        start: usize,
+        end: u16,
+        name: SmallDetachedStrSpan,
+        public1: SmallDetachedStrSpan,
+        public2: SmallDetachedStrSpan,
     },
 
     /// Empty DOCTYPE token.
@@ -146,11 +175,41 @@ pub enum Token {
     ///                    ------------------  - external_id?
     /// -------------------------------------- - span
     /// ```
-    EmptyDtd {
+    EmptyDtdNoExternalId {
         start: usize,
-        end: u32,
+        end: u16,
         name: SmallDetachedStrSpan,
-        external_id: Option<ExternalId>,
+    },
+
+    /// Empty DOCTYPE token.
+    ///
+    /// ```text
+    /// <!DOCTYPE greeting SYSTEM "hello.dtd">
+    ///           --------                     - name
+    ///                    ------------------  - external_id?
+    /// -------------------------------------- - span
+    /// ```
+    EmptyDtdSystemExternalId {
+        start: usize,
+        end: u16,
+        name: SmallDetachedStrSpan,
+        external_id: SmallDetachedStrSpan,
+    },
+
+    /// Empty DOCTYPE token.
+    ///
+    /// ```text
+    /// <!DOCTYPE greeting PUBLIC "hello.dtd">
+    ///           --------                     - name
+    ///                    ------------------  - external_id?
+    /// -------------------------------------- - span
+    /// ```
+    EmptyDtdPublicExternalId {
+        start: usize,
+        end: u16,
+        name: SmallDetachedStrSpan,
+        public1: SmallDetachedStrSpan,
+        public2: SmallDetachedStrSpan,
     },
 
     /// ENTITY token.
@@ -163,11 +222,46 @@ pub enum Token {
     ///                     ---------------   - definition
     /// ------------------------------------- - span
     /// ```
-    EntityDeclaration {
+    EntityDeclarationEntityValue {
         start: usize,
-        end: u32,
+        end: u16,
         name: SmallDetachedStrSpan,
-        definition: EntityDefinition,
+        entity_value: SmallDetachedStrSpan,
+    },
+
+    /// ENTITY token.
+    ///
+    /// Can appear only inside the DTD.
+    ///
+    /// ```text
+    /// <!ENTITY ns_extend "http://test.com">
+    ///          ---------                    - name
+    ///                     ---------------   - definition
+    /// ------------------------------------- - span
+    /// ```
+    EntityDeclarationSystemExternalId {
+        start: usize,
+        end: u16,
+        name: SmallDetachedStrSpan,
+        external_id: SmallDetachedStrSpan,
+    },
+
+    /// ENTITY token.
+    ///
+    /// Can appear only inside the DTD.
+    ///
+    /// ```text
+    /// <!ENTITY ns_extend "http://test.com">
+    ///          ---------                    - name
+    ///                     ---------------   - definition
+    /// ------------------------------------- - span
+    /// ```
+    EntityDeclarationPublicExternalId {
+        start: usize,
+        end: u16,
+        name: SmallDetachedStrSpan,
+        public1: SmallDetachedStrSpan,
+        public2: SmallDetachedStrSpan,
     },
 
     /// DOCTYPE end token.
@@ -178,7 +272,7 @@ pub enum Token {
     /// ]>
     /// -- - span
     /// ```
-    DtdEnd { start: usize, end: u32 },
+    DtdEnd { start: usize, end: u16 },
 
     /// Element start token.
     ///
@@ -190,7 +284,7 @@ pub enum Token {
     /// ```
     ElementStart {
         start: usize,
-        end: u32,
+        end: u16,
         prefix: SmallDetachedStrSpan,
         local: SmallDetachedStrSpan,
     },
@@ -206,7 +300,7 @@ pub enum Token {
     /// ```
     Attribute {
         start: usize,
-        end: u32,
+        end: u16,
         prefix: SmallDetachedStrSpan,
         local: SmallDetachedStrSpan,
         value: SmallDetachedStrSpan,
@@ -233,7 +327,7 @@ pub enum Token {
     /// ```
     ElementEnd {
         start: usize,
-        end: u32,
+        end: u16,
         el_end: ElementEnd,
     },
 
@@ -383,8 +477,16 @@ impl<'a> Tokenizer<'a> {
                 if s.starts_with(b"<!DOCTYPE") {
                     let t = Self::parse_doctype(s);
                     match t {
-                        Ok(Token::DtdStart { .. }) => self.state = State::Dtd,
-                        Ok(Token::EmptyDtd { .. }) => self.state = State::AfterDtd,
+                        Ok(
+                            Token::DtdStartNoExternalId { .. }
+                            | Token::DtdStartSystemExternalId { .. }
+                            | Token::DtdStartPublicExternalId { .. },
+                        ) => self.state = State::Dtd,
+                        Ok(
+                            Token::EmptyDtdNoExternalId { .. }
+                            | Token::EmptyDtdSystemExternalId { .. }
+                            | Token::EmptyDtdPublicExternalId { .. },
+                        ) => self.state = State::AfterDtd,
                         _ => {}
                     }
 
@@ -426,7 +528,7 @@ impl<'a> Tokenizer<'a> {
                             s.advance(1);
                             Some(Ok(Token::DtdEnd {
                                 start,
-                                end: (s.pos() - start) as u32,
+                                end: (s.pos() - start) as u16,
                             }))
                         }
                         Ok(c) => {
@@ -596,9 +698,11 @@ impl<'a> Tokenizer<'a> {
         Ok(Token::Declaration {
             start,
             version: version.detach_small(start),
-            encoding: encoding.map(|e| e.detach_small(start)),
+            encoding: encoding
+                .map(|e| e.detach_small(start))
+                .unwrap_or_else(SmallDetachedStrSpan::empty),
             standalone,
-            end: (s.pos() - start) as u32,
+            end: (s.pos() - start) as u16,
         })
     }
 
@@ -718,9 +822,11 @@ impl<'a> Tokenizer<'a> {
 
         Ok(Token::ProcessingInstruction {
             start,
-            end: (s.pos() - start) as u32,
+            end: (s.pos() - start) as u16,
             target: target.detach_small(start),
-            content: content.map(|c| c.detach_small(start)),
+            content: content
+                .map(|c| c.detach_small(start))
+                .unwrap_or_else(SmallDetachedStrSpan::empty),
         })
     }
 
@@ -753,18 +859,46 @@ impl<'a> Tokenizer<'a> {
         s.advance(1);
 
         if c == b'[' {
-            Ok(Token::DtdStart {
-                start,
-                end: (s.pos() - start) as u32,
-                name: name.detach_small(start),
-                external_id,
+            Ok(match external_id {
+                None => Token::DtdStartNoExternalId {
+                    start,
+                    end: (s.pos() - start) as u16,
+                    name: name.detach_small(start),
+                },
+                Some(ExternalId::System(ext_id)) => Token::DtdStartSystemExternalId {
+                    start,
+                    end: (s.pos() - start) as u16,
+                    name: name.detach_small(start),
+                    external_id: ext_id,
+                },
+                Some(ExternalId::Public(p1, p2)) => Token::DtdStartPublicExternalId {
+                    start,
+                    end: (s.pos() - start) as u16,
+                    name: name.detach_small(start),
+                    public1: p1,
+                    public2: p2,
+                },
             })
         } else {
-            Ok(Token::EmptyDtd {
-                start,
-                end: (s.pos() - start) as u32,
-                name: name.detach_small(start),
-                external_id,
+            Ok(match external_id {
+                None => Token::EmptyDtdNoExternalId {
+                    start,
+                    end: (s.pos() - start) as u16,
+                    name: name.detach_small(start),
+                },
+                Some(ExternalId::System(ext_id)) => Token::EmptyDtdSystemExternalId {
+                    start,
+                    end: (s.pos() - start) as u16,
+                    name: name.detach_small(start),
+                    external_id: ext_id,
+                },
+                Some(ExternalId::Public(p1, p2)) => Token::EmptyDtdPublicExternalId {
+                    start,
+                    end: (s.pos() - start) as u16,
+                    name: name.detach_small(start),
+                    public1: p1,
+                    public2: p2,
+                },
             })
         }
     }
@@ -826,11 +960,30 @@ impl<'a> Tokenizer<'a> {
         s.skip_spaces();
         s.consume_byte(b'>')?;
 
-        Ok(Token::EntityDeclaration {
-            start,
-            end: (s.pos() - start) as u32,
-            name: name.detach_small(start),
-            definition,
+        Ok(match definition {
+            EntityDefinition::EntityValue(entity_value) => Token::EntityDeclarationEntityValue {
+                start,
+                end: (s.pos() - start) as u16,
+                name: name.detach_small(start),
+                entity_value,
+            },
+            EntityDefinition::ExternalId(ExternalId::System(ext_id)) => {
+                Token::EntityDeclarationSystemExternalId {
+                    start,
+                    end: (s.pos() - start) as u16,
+                    name: name.detach_small(start),
+                    external_id: ext_id,
+                }
+            }
+            EntityDefinition::ExternalId(ExternalId::Public(p1, p2)) => {
+                Token::EntityDeclarationPublicExternalId {
+                    start,
+                    end: (s.pos() - start) as u16,
+                    name: name.detach_small(start),
+                    public1: p1,
+                    public2: p2,
+                }
+            }
         })
     }
 
@@ -916,7 +1069,7 @@ impl<'a> Tokenizer<'a> {
         let (prefix, local) = s.consume_qname()?;
         Ok(Token::ElementStart {
             start,
-            end: (s.pos() - start) as u32,
+            end: (s.pos() - start) as u16,
             prefix: prefix.detach_small(start),
             local: local.detach_small(start),
         })
@@ -936,7 +1089,7 @@ impl<'a> Tokenizer<'a> {
         s.consume_byte(b'>')?;
         Ok(Token::ElementEnd {
             start,
-            end: (s.pos() - start) as u32,
+            end: (s.pos() - start) as u16,
             el_end: ElementEnd::Close(prefix.detach_small(0), tag_name.detach_small(0)),
         })
     }
@@ -956,7 +1109,7 @@ impl<'a> Tokenizer<'a> {
                     s.consume_byte(b'>')?;
                     return Ok(Token::ElementEnd {
                         start,
-                        end: (s.pos() - start) as u32,
+                        end: (s.pos() - start) as u16,
                         el_end: ElementEnd::Empty,
                     });
                 }
@@ -964,7 +1117,7 @@ impl<'a> Tokenizer<'a> {
                     s.advance(1);
                     return Ok(Token::ElementEnd {
                         start,
-                        end: (s.pos() - start) as u32,
+                        end: (s.pos() - start) as u16,
                         el_end: ElementEnd::Open,
                     });
                 }
@@ -995,7 +1148,7 @@ impl<'a> Tokenizer<'a> {
 
         Ok(Token::Attribute {
             start,
-            end: (s.pos() - start) as u32,
+            end: (s.pos() - start) as u16,
             prefix: prefix.detach_small(start),
             local: local.detach_small(start),
             value: value.detach_small(start),
