@@ -1090,7 +1090,7 @@ impl<'a> Tokenizer<'a> {
         Ok(Token::ElementEnd {
             start,
             end: (s.pos() - start) as u16,
-            el_end: ElementEnd::Close(prefix.detach_small(0), tag_name.detach_small(0)),
+            el_end: ElementEnd::Close(prefix.detach_small(start), tag_name.detach_small(start)),
         })
     }
 
