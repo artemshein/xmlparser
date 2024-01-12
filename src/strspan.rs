@@ -28,8 +28,10 @@ impl DetachedStrSpan {
 /// A string slice, holding offsets only.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SmallDetachedStrSpan {
-    start: u16,
-    end: u16,
+    /// starting offset of the span
+    pub start: u16,
+    /// ending offset of the span
+    pub end: u16,
 }
 
 impl SmallDetachedStrSpan {
