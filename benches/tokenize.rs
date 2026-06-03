@@ -1,7 +1,13 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
-fn tokenize(input: &str) -> usize {
+fn tokenize_fork(input: &str) -> usize {
     xmlparser::Tokenizer::from(input)
+        .filter_map(|t| t.ok())
+        .count()
+}
+
+fn tokenize_upstream(input: &str) -> usize {
+    xmlparser_upstream::Tokenizer::from(input)
         .filter_map(|t| t.ok())
         .count()
 }
@@ -22,9 +28,16 @@ fn bench_tokenize(c: &mut Criterion) {
 
     for (name, input) in [("dense", DENSE), ("spaced", SPACED), ("dtd", DTD)] {
         group.throughput(Throughput::Bytes(input.len() as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(name), input, |b, i| {
-            b.iter(|| tokenize(criterion::black_box(i)));
-        });
+        group.bench_with_input(
+            BenchmarkId::new("fork", name),
+            input,
+            |b, i| b.iter(|| tokenize_fork(criterion::black_box(i))),
+        );
+        group.bench_with_input(
+            BenchmarkId::new("upstream", name),
+            input,
+            |b, i| b.iter(|| tokenize_upstream(criterion::black_box(i))),
+        );
     }
 
     group.finish();
