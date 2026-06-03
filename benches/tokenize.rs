@@ -32,20 +32,31 @@ fn load(name: &str) -> String {
         .unwrap_or_else(|e| panic!("failed to read {}: {}", path.display(), e))
 }
 
+fn try_load(name: &str) -> Option<String> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("benches/data")
+        .join(name);
+    std::fs::read_to_string(&path).ok()
+}
+
 fn bench_tokenize(c: &mut Criterion) {
     let dense = load("dense.xml");
     let spaced = load("spaced.xml");
     let dtd = load("dtd.xml");
-    let large = load("large.xml");
+    let large = try_load("large.xml");
 
     let mut group = c.benchmark_group("tokenize");
 
-    for (name, input) in [
+    let mut fixtures: Vec<(&str, &str)> = vec![
         ("dense", dense.as_str()),
         ("spaced", spaced.as_str()),
         ("dtd", dtd.as_str()),
-        ("large", large.as_str()),
-    ] {
+    ];
+    if let Some(ref s) = large {
+        fixtures.push(("large", s.as_str()));
+    }
+
+    for (name, input) in fixtures {
         group.throughput(Throughput::Bytes(input.len() as u64));
         group.bench_with_input(BenchmarkId::new("fork", name), input, |b, i| {
             b.iter(|| tokenize_fork(criterion::black_box(i)))
