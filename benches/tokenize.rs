@@ -24,21 +24,28 @@ fn collect_upstream<'a>(input: &'a str) -> Vec<xmlparser_upstream::Token<'a>> {
         .collect()
 }
 
-// Dense XML: minimal whitespace, mostly element data.
-static DENSE: &str = include_str!("data/dense.xml");
-
-// Spaced XML: heavy inter-element whitespace — stresses the skip-whitespace path
-// that previously used recursion.
-static SPACED: &str = include_str!("data/spaced.xml");
-
-// DTD XML: document with a DOCTYPE block containing multiple ENTITY declarations,
-// comments and ignored sections — stresses the Dtd/AfterDeclaration skip paths.
-static DTD: &str = include_str!("data/dtd.xml");
+fn load(name: &str) -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("benches/data")
+        .join(name);
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {}", path.display(), e))
+}
 
 fn bench_tokenize(c: &mut Criterion) {
+    let dense = load("dense.xml");
+    let spaced = load("spaced.xml");
+    let dtd = load("dtd.xml");
+    let large = load("large.xml");
+
     let mut group = c.benchmark_group("tokenize");
 
-    for (name, input) in [("dense", DENSE), ("spaced", SPACED), ("dtd", DTD)] {
+    for (name, input) in [
+        ("dense", dense.as_str()),
+        ("spaced", spaced.as_str()),
+        ("dtd", dtd.as_str()),
+        ("large", large.as_str()),
+    ] {
         group.throughput(Throughput::Bytes(input.len() as u64));
         group.bench_with_input(
             BenchmarkId::new("fork", name),
@@ -56,9 +63,17 @@ fn bench_tokenize(c: &mut Criterion) {
 }
 
 fn bench_collect(c: &mut Criterion) {
+    let dense = load("dense.xml");
+    let spaced = load("spaced.xml");
+    let dtd = load("dtd.xml");
+
     let mut group = c.benchmark_group("collect");
 
-    for (name, input) in [("dense", DENSE), ("spaced", SPACED), ("dtd", DTD)] {
+    for (name, input) in [
+        ("dense", dense.as_str()),
+        ("spaced", spaced.as_str()),
+        ("dtd", dtd.as_str()),
+    ] {
         group.throughput(Throughput::Bytes(input.len() as u64));
         group.bench_with_input(
             BenchmarkId::new("fork", name),
@@ -79,11 +94,11 @@ fn bench_token_sizes(_c: &mut Criterion) {
     let fork_token = std::mem::size_of::<xmlparser::Token>();
     let upstream_token = std::mem::size_of::<xmlparser_upstream::Token<'_>>();
 
-    // Count tokens and compute Vec memory footprint for dense XML.
-    let fork_tokens: Vec<_> = xmlparser::Tokenizer::from(DENSE)
+    let dense = load("dense.xml");
+    let fork_tokens: Vec<_> = xmlparser::Tokenizer::from(dense.as_str())
         .filter_map(|t| t.ok())
         .collect();
-    let upstream_tokens: Vec<_> = xmlparser_upstream::Tokenizer::from(DENSE)
+    let upstream_tokens: Vec<_> = xmlparser_upstream::Tokenizer::from(dense.as_str())
         .filter_map(|t| t.ok())
         .collect();
 
