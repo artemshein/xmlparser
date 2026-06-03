@@ -15,6 +15,7 @@ pub trait XmlCharExt {
 
 impl XmlCharExt for char {
     #[inline]
+    #[allow(clippy::match_like_matches_macro)]
     fn is_xml_name_start(&self) -> bool {
         // Check for ASCII first.
         if *self as u32 <= 128 {
@@ -37,6 +38,7 @@ impl XmlCharExt for char {
     }
 
     #[inline]
+    #[allow(clippy::match_like_matches_macro)]
     fn is_xml_name(&self) -> bool {
         // Check for ASCII first.
         if *self as u32 <= 128 {
@@ -63,13 +65,12 @@ impl XmlCharExt for char {
 
     #[inline]
     fn is_xml_char(&self) -> bool {
-        matches!(*self as u32,
-            0x000009
-            | 0x00000A
-            | 0x00000D
-            | 0x000020..=0x00D7FF
-            | 0x00E000..=0x00FFFD
-            | 0x010000..=0x10FFFF)
+        // Does not check for surrogate code points U+D800-U+DFFF,
+        // since that check was performed by Rust when the `&str` was constructed.
+        if (*self as u32) < 0x20 {
+            return (*self as u8).is_xml_space();
+        }
+        !matches!(*self as u32, 0xFFFF | 0xFFFE)
     }
 }
 

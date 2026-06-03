@@ -79,6 +79,30 @@ impl<'a> From<&'a str> for StrSpan<'a> {
     }
 }
 
+impl PartialEq<str> for StrSpan<'_> {
+    fn eq(&self, other: &str) -> bool {
+        self.text == other
+    }
+}
+
+impl PartialEq<&str> for StrSpan<'_> {
+    fn eq(&self, other: &&str) -> bool {
+        self.text == *other
+    }
+}
+
+impl PartialEq<StrSpan<'_>> for str {
+    fn eq(&self, other: &StrSpan<'_>) -> bool {
+        self == other.text
+    }
+}
+
+impl PartialEq<StrSpan<'_>> for &str {
+    fn eq(&self, other: &StrSpan<'_>) -> bool {
+        *self == other.text
+    }
+}
+
 impl<'a> StrSpan<'a> {
     /// Constructs a new `StrSpan` from substring.
     #[inline]
@@ -88,6 +112,11 @@ impl<'a> StrSpan<'a> {
             text: &text[start..end],
             start,
         }
+    }
+
+    /// Returns `true` if self is empty.
+    pub fn is_empty(&self) -> bool {
+        self.text.is_empty()
     }
 
     /// Make a detached span for span
@@ -147,7 +176,7 @@ impl<'a> StrSpan<'a> {
     }
 }
 
-impl<'a> fmt::Debug for StrSpan<'a> {
+impl fmt::Debug for StrSpan<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -159,13 +188,13 @@ impl<'a> fmt::Debug for StrSpan<'a> {
     }
 }
 
-impl<'a> fmt::Display for StrSpan<'a> {
+impl fmt::Display for StrSpan<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.as_str())
     }
 }
 
-impl<'a> Deref for StrSpan<'a> {
+impl Deref for StrSpan<'_> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
