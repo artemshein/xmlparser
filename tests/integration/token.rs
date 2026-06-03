@@ -53,7 +53,7 @@ macro_rules! test {
 }
 
 #[inline(never)]
-pub fn to_test_token(token: Result<xml::Token, xml::Error>, text: &str) -> Token {
+pub fn to_test_token(token: Result<xml::Token, xml::Error>, text: &str) -> Token<'_> {
     match token {
         Ok(xml::Token::Declaration {
             start,
@@ -220,7 +220,7 @@ pub fn to_test_token(token: Result<xml::Token, xml::Error>, text: &str) -> Token
             match el_end {
                 xml::ElementEnd::Open => ElementEnd::Open,
                 xml::ElementEnd::Close(prefix, local) => {
-                    ElementEnd::Close(prefix.as_str(text, 0), local.as_str(text, 0))
+                    ElementEnd::Close(prefix.as_str(text, start), local.as_str(text, start))
                 }
                 xml::ElementEnd::Empty => ElementEnd::Empty,
             },
@@ -240,7 +240,7 @@ pub fn to_test_token(token: Result<xml::Token, xml::Error>, text: &str) -> Token
     }
 }
 
-fn to_test_external_id(id: xml::ExternalId, text: &str, start: usize) -> ExternalId {
+fn to_test_external_id(id: xml::ExternalId, text: &str, start: usize) -> ExternalId<'_> {
     match id {
         xml::ExternalId::System(name) => ExternalId::System(name.as_str(text, start)),
         xml::ExternalId::Public(name, value) => {

@@ -616,7 +616,7 @@ impl<'a> Tokenizer<'a> {
                             Some(Self::parse_element_start(s))
                         }
                         Err(_) => {
-                            return Some(Err(Error::UnknownToken(s.gen_text_pos())));
+                            Some(Err(Error::UnknownToken(s.gen_text_pos())))
                         }
                     },
                     Ok(_) => Some(Self::parse_text(s)),
@@ -848,7 +848,7 @@ impl<'a> Tokenizer<'a> {
 
         let c = s.curr_byte()?;
         if c != b'[' && c != b'>' {
-            static EXPECTED: &[u8] = &[b'[', b'>'];
+            static EXPECTED: &[u8] = b"[>";
             return Err(StreamError::InvalidCharMultiple(
                 c,
                 EXPECTED,
@@ -1025,7 +1025,7 @@ impl<'a> Tokenizer<'a> {
                 }
             }
             _ => {
-                static EXPECTED: &[u8] = &[b'"', b'\'', b'S', b'P'];
+                static EXPECTED: &[u8] = b"\"'SP";
                 let pos = s.gen_text_pos();
                 Err(StreamError::InvalidCharMultiple(c, EXPECTED, pos))
             }
@@ -1167,11 +1167,10 @@ impl<'a> Tokenizer<'a> {
         // https://www.w3.org/TR/xml/#syntax
         //
         // Search for `>` first, since it's a bit faster than looking for `]]>`.
-        if text.as_str().contains('>') {
-            if text.as_str().contains("]]>") {
+        if text.as_str().contains('>')
+            && text.as_str().contains("]]>") {
                 return Err(StreamError::InvalidCharacterData);
             }
-        }
 
         Ok(Token::Text {
             start,

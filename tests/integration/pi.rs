@@ -166,7 +166,7 @@ test!(
     declaration_err_13,
     "<?target \u{0000}content>",
     Token::Error(
-        "invalid processing instruction at 1:1 cause a non-XML character '\\u{0}' found at 1:10"
+        "invalid processing instruction at 1:1 cause a non-XML character '\\0' found at 1:10"
             .to_string()
     )
 );

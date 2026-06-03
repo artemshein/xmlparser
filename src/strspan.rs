@@ -82,7 +82,7 @@ impl<'a> From<&'a str> for StrSpan<'a> {
 impl<'a> StrSpan<'a> {
     /// Constructs a new `StrSpan` from substring.
     #[inline]
-    pub(crate) fn from_substr(text: &str, start: usize, end: usize) -> StrSpan {
+    pub(crate) fn from_substr(text: &str, start: usize, end: usize) -> StrSpan<'_> {
         debug_assert!(start <= end);
         StrSpan {
             text: &text[start..end],
@@ -137,7 +137,7 @@ impl<'a> StrSpan<'a> {
     /// Returns the span as a string slice
     #[inline]
     pub fn as_str(&self) -> &'a str {
-        &self.text
+        self.text
     }
 
     /// Returns an underling string region as `StrSpan`.
