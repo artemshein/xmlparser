@@ -91,7 +91,5 @@ test!(
     "<p><![CDATA[\0]]></p>",
     Token::ElementStart("", "p", 0..2),
     Token::ElementEnd(ElementEnd::Open, 2..3),
-    Token::Error(
-        "invalid CDATA at 1:4 cause a non-XML character '\\0' found at 1:13".to_string()
-    )
+    Token::Error("invalid CDATA at 1:4 cause a non-XML character '\\0' found at 1:13".to_string())
 );

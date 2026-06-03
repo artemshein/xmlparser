@@ -615,9 +615,7 @@ impl<'a> Tokenizer<'a> {
                             self.state = State::Attributes;
                             Some(Self::parse_element_start(s))
                         }
-                        Err(_) => {
-                            Some(Err(Error::UnknownToken(s.gen_text_pos())))
-                        }
+                        Err(_) => Some(Err(Error::UnknownToken(s.gen_text_pos()))),
                     },
                     Ok(_) => Some(Self::parse_text(s)),
                     Err(_) => Some(Err(Error::UnknownToken(s.gen_text_pos()))),
@@ -1167,10 +1165,9 @@ impl<'a> Tokenizer<'a> {
         // https://www.w3.org/TR/xml/#syntax
         //
         // Search for `>` first, since it's a bit faster than looking for `]]>`.
-        if text.as_str().contains('>')
-            && text.as_str().contains("]]>") {
-                return Err(StreamError::InvalidCharacterData);
-            }
+        if text.as_str().contains('>') && text.as_str().contains("]]>") {
+            return Err(StreamError::InvalidCharacterData);
+        }
 
         Ok(Token::Text {
             start,

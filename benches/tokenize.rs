@@ -47,16 +47,12 @@ fn bench_tokenize(c: &mut Criterion) {
         ("large", large.as_str()),
     ] {
         group.throughput(Throughput::Bytes(input.len() as u64));
-        group.bench_with_input(
-            BenchmarkId::new("fork", name),
-            input,
-            |b, i| b.iter(|| tokenize_fork(criterion::black_box(i))),
-        );
-        group.bench_with_input(
-            BenchmarkId::new("upstream", name),
-            input,
-            |b, i| b.iter(|| tokenize_upstream(criterion::black_box(i))),
-        );
+        group.bench_with_input(BenchmarkId::new("fork", name), input, |b, i| {
+            b.iter(|| tokenize_fork(criterion::black_box(i)))
+        });
+        group.bench_with_input(BenchmarkId::new("upstream", name), input, |b, i| {
+            b.iter(|| tokenize_upstream(criterion::black_box(i)))
+        });
     }
 
     group.finish();
@@ -75,16 +71,12 @@ fn bench_collect(c: &mut Criterion) {
         ("dtd", dtd.as_str()),
     ] {
         group.throughput(Throughput::Bytes(input.len() as u64));
-        group.bench_with_input(
-            BenchmarkId::new("fork", name),
-            input,
-            |b, i| b.iter(|| collect_fork(criterion::black_box(i))),
-        );
-        group.bench_with_input(
-            BenchmarkId::new("upstream", name),
-            input,
-            |b, i| b.iter(|| collect_upstream(criterion::black_box(i))),
-        );
+        group.bench_with_input(BenchmarkId::new("fork", name), input, |b, i| {
+            b.iter(|| collect_fork(criterion::black_box(i)))
+        });
+        group.bench_with_input(BenchmarkId::new("upstream", name), input, |b, i| {
+            b.iter(|| collect_upstream(criterion::black_box(i)))
+        });
     }
 
     group.finish();
@@ -105,7 +97,10 @@ fn bench_token_sizes(_c: &mut Criterion) {
     let n = fork_tokens.len();
     assert_eq!(n, upstream_tokens.len());
 
-    println!("\n=== Token memory comparison (dense.xml, {} tokens) ===", n);
+    println!(
+        "\n=== Token memory comparison (dense.xml, {} tokens) ===",
+        n
+    );
     println!(
         "  fork     Token size: {:>3} bytes  →  Vec<Token> heap: {} bytes",
         fork_token,
