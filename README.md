@@ -24,6 +24,52 @@ call `span.as_str(full_text, token_start)`.
 The result is that `Token` has no lifetime parameter, is `Copy + 'static`, and the token enum
 variants are significantly smaller in memory.
 
+### Benchmarks
+
+Measured on Apple Silicon (aarch64) with Rust 1.96. Three XML fixtures:
+- **dense** — 44 KB, compact elements, minimal whitespace
+- **spaced** — 66 KB, heavy inter-element whitespace
+- **dtd** — 12 KB, DOCTYPE with 50 ENTITY declarations, comments, and processing instructions
+- **large** — 1 GB, 10.5 million items, same structure as dense
+
+#### Token memory footprint
+
+| | This fork | Upstream |
+|---|---|---|
+| `size_of::<Token>()` | **24 bytes** | 112 bytes |
+| 10.5 M tokens (1 GB file) | **240 MB** | 1 120 MB |
+| Savings | **−88 bytes/token (78.6%)** | — |
+
+The fork stores two `u16` offsets per span relative to the token start; upstream stores a full
+`&str` (pointer + length = 16 bytes) per span.
+
+#### Streaming throughput (tokens counted, nothing stored)
+
+| File | Fork | Upstream | Δ |
+|---|---|---|---|
+| dense (44 KB) | 453 MiB/s | 440 MiB/s | **+3%** |
+| spaced (66 KB) | 503 MiB/s | 496 MiB/s | **+2%** |
+| dtd (12 KB) | 474 MiB/s | 445 MiB/s | **+6%** |
+| large (1 GB) | 487 MiB/s | 476 MiB/s | **+2.5%** |
+
+#### Collect throughput (`Vec<Token>` allocation included)
+
+| File | Fork | Upstream | Δ |
+|---|---|---|---|
+| dense (44 KB) | 424 MiB/s | 342 MiB/s | **+24%** |
+| spaced (66 KB) | 471 MiB/s | 400 MiB/s | **+18%** |
+| dtd (12 KB) | 433 MiB/s | 358 MiB/s | **+21%** |
+
+The streaming gap (~2–6%) reflects smaller tokens fitting better in registers. The collect gap
+(~18–24%) is driven directly by the 4.7× smaller `Vec` — less memory to allocate, write, and
+grow during reallocation.
+
+Benchmarks live in `benches/tokenize.rs` and can be reproduced with:
+
+```
+cargo bench
+```
+
 ---
 
 # xmlparser
