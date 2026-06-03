@@ -1,4 +1,31 @@
-## xmlparser
+## xmlparser (fork)
+
+This is a fork of [RazrFalcon/xmlparser](https://github.com/RazrFalcon/xmlparser) with a focus on
+reducing memory consumption and removing the lifetime parameter from `Token`.
+
+### Differences from upstream
+
+The upstream library represents token fields as `StrSpan<'a>`, a struct that holds a `&'a str`
+pointer along with a byte offset into the original document. This ties every `Token<'a>` to the
+lifetime of the source string, and each span carries an 8-byte pointer even though the pointer is
+always the same (the start of the document).
+
+This fork replaces `StrSpan<'a>` fields inside tokens with two offset-only types:
+
+- **`SmallDetachedStrSpan`** — stores `start` and `end` as `u16` values relative to the token's
+  own `start` offset. Used for short in-token strings (tag names, attribute names/values, etc.).
+- **`DetachedStrSpan`** — stores `start` and `end` as `u32` absolute offsets. Used where `u16`
+  would overflow.
+
+Each token stores one absolute `start: usize` position and a `end: u16` length. All string spans
+inside the token are relative to that `start`, so no pointer is stored. To recover a `&str` you
+call `span.as_str(full_text, token_start)`.
+
+The result is that `Token` has no lifetime parameter, is `Copy + 'static`, and the token enum
+variants are significantly smaller in memory.
+
+---
+
 ![Build Status](https://github.com/RazrFalcon/xmlparser/workflows/Rust/badge.svg)
 [![Crates.io](https://img.shields.io/crates/v/xmlparser.svg)](https://crates.io/crates/xmlparser)
 [![Documentation](https://docs.rs/xmlparser/badge.svg)](https://docs.rs/xmlparser)
