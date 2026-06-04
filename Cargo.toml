@@ -3,7 +3,7 @@ name = "xmlparser"
 version = "0.13.6"
 authors = ["Yevhenii Reizner <razrfalcon@gmail.com>"]
 edition = "2018"
-rust-version = "1.64"
+rust-version = "1.66"
 description = "Pull-based, zero-allocation XML parser."
 documentation = "https://docs.rs/xmlparser"
 readme = "README.md"
@@ -18,7 +18,7 @@ default = ["std"]
 std = []
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 xmlparser-upstream = { version = "0.13", package = "xmlparser" }
 
 [[bench]]

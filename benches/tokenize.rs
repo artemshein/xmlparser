@@ -59,10 +59,10 @@ fn bench_tokenize(c: &mut Criterion) {
     for (name, input) in fixtures {
         group.throughput(Throughput::Bytes(input.len() as u64));
         group.bench_with_input(BenchmarkId::new("fork", name), input, |b, i| {
-            b.iter(|| tokenize_fork(criterion::black_box(i)))
+            b.iter(|| tokenize_fork(std::hint::black_box(i)))
         });
         group.bench_with_input(BenchmarkId::new("upstream", name), input, |b, i| {
-            b.iter(|| tokenize_upstream(criterion::black_box(i)))
+            b.iter(|| tokenize_upstream(std::hint::black_box(i)))
         });
     }
 
@@ -83,10 +83,10 @@ fn bench_collect(c: &mut Criterion) {
     ] {
         group.throughput(Throughput::Bytes(input.len() as u64));
         group.bench_with_input(BenchmarkId::new("fork", name), input, |b, i| {
-            b.iter(|| collect_fork(criterion::black_box(i)))
+            b.iter(|| collect_fork(std::hint::black_box(i)))
         });
         group.bench_with_input(BenchmarkId::new("upstream", name), input, |b, i| {
-            b.iter(|| collect_upstream(criterion::black_box(i)))
+            b.iter(|| collect_upstream(std::hint::black_box(i)))
         });
     }
 

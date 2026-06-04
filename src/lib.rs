@@ -477,16 +477,16 @@ impl<'a> Tokenizer<'a> {
                 if s.starts_with(b"<!DOCTYPE") {
                     let t = Self::parse_doctype(s);
                     match t {
-                        Ok(
-                            Token::DtdStartNoExternalId { .. }
-                            | Token::DtdStartSystemExternalId { .. }
-                            | Token::DtdStartPublicExternalId { .. },
-                        ) => self.state = State::Dtd,
-                        Ok(
-                            Token::EmptyDtdNoExternalId { .. }
-                            | Token::EmptyDtdSystemExternalId { .. }
-                            | Token::EmptyDtdPublicExternalId { .. },
-                        ) => self.state = State::AfterDtd,
+                        Ok(Token::DtdStartNoExternalId { .. })
+                        | Ok(Token::DtdStartSystemExternalId { .. })
+                        | Ok(Token::DtdStartPublicExternalId { .. }) => {
+                            self.state = State::Dtd
+                        }
+                        Ok(Token::EmptyDtdNoExternalId { .. })
+                        | Ok(Token::EmptyDtdSystemExternalId { .. })
+                        | Ok(Token::EmptyDtdPublicExternalId { .. }) => {
+                            self.state = State::AfterDtd
+                        }
                         _ => {}
                     }
 
