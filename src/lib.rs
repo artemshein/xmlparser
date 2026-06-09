@@ -1187,9 +1187,10 @@ impl<'a> Tokenizer<'a> {
         let (prefix, local) = s.consume_qname()?;
         s.consume_eq()?;
         let quote = s.consume_quote()?;
-        let quote_c = quote as char;
         // The attribute value must not contain the < character.
-        let value = s.consume_chars(|_, c| c != quote_c && c != '<')?;
+        let value_start = s.pos();
+        s.skip_attr_value(quote)?;
+        let value = s.slice_back(value_start);
         s.consume_byte(quote)?;
 
         let end = token_end16(s, start)?;
@@ -1208,15 +1209,10 @@ impl<'a> Tokenizer<'a> {
 
     fn parse_text_impl(s: &mut Stream<'a>) -> StreamResult<Token> {
         let start = s.pos();
-        let text = s.consume_chars(|_, c| c != '<')?;
-
-        // According to the spec, `]]>` must not appear inside a Text node.
+        // `]]>` must not appear inside a Text node, checked during the scan.
         // https://www.w3.org/TR/xml/#syntax
-        //
-        // Search for `>` first, since it's a bit faster than looking for `]]>`.
-        if text.as_str().contains('>') && text.as_str().contains("]]>") {
-            return Err(StreamError::InvalidCharacterData);
-        }
+        s.skip_text_content()?;
+        let text = s.slice_back(start);
 
         let end = token_end32(s, start)?;
         Ok(Token::Text {

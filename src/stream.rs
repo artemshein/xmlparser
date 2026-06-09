@@ -7,6 +7,40 @@ use crate::{StrSpan, StreamError, TextPos, XmlByteExt, XmlCharExt};
 
 type Result<T> = ::core::result::Result<T, StreamError>;
 
+// ASCII name bytes excluding ':' (handled separately as the qname splitter).
+const fn build_name_class() -> [bool; 256] {
+    let mut t = [false; 256];
+    let mut i = 0;
+    while i < 256 {
+        let b = i as u8;
+        t[i] = b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b'.';
+        i += 1;
+    }
+    t
+}
+static NAME_CLASS: [bool; 256] = build_name_class();
+
+// Bytes that can appear in character data without further checks.
+// Excluded: controls other than \t \n \r, '<' (terminator), ']' (']]>' check),
+// 0xEF (may start U+FFFE/U+FFFF). All other UTF-8 bytes are valid XML chars,
+// since `&str` already guarantees valid UTF-8 (no surrogates).
+const fn build_text_ok() -> [bool; 256] {
+    let mut t = [true; 256];
+    let mut i = 0;
+    while i < 0x20 {
+        t[i] = false;
+        i += 1;
+    }
+    t[b'\t' as usize] = true;
+    t[b'\n' as usize] = true;
+    t[b'\r' as usize] = true;
+    t[b'<' as usize] = false;
+    t[b']' as usize] = false;
+    t[0xEF] = false;
+    t
+}
+static TEXT_OK: [bool; 256] = build_text_ok();
+
 /// Representation of the [Reference](https://www.w3.org/TR/xml/#NT-Reference) value.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Reference<'a> {
@@ -308,6 +342,72 @@ impl<'a> Stream<'a> {
         Ok(())
     }
 
+    // Returns Err on U+FFFE/U+FFFF at the current position, advances past 0xEF otherwise.
+    #[inline(never)]
+    fn check_ef_sequence(&mut self) -> Result<()> {
+        let bytes = self.span.as_bytes();
+        if self.pos + 2 < self.end && bytes[self.pos + 1] == 0xBF && bytes[self.pos + 2] >= 0xBE {
+            let c = if bytes[self.pos + 2] == 0xBE {
+                '\u{FFFE}'
+            } else {
+                '\u{FFFF}'
+            };
+            return Err(StreamError::NonXmlChar(c, self.gen_text_pos()));
+        }
+        self.pos += 1;
+        Ok(())
+    }
+
+    /// Skips character data until `<`, validating XML chars and rejecting `]]>`.
+    pub(crate) fn skip_text_content(&mut self) -> Result<()> {
+        let bytes = self.span.as_str().as_bytes();
+        let end = self.end;
+        while self.pos < end {
+            let b = bytes[self.pos];
+            if TEXT_OK[b as usize] {
+                self.pos += 1;
+                continue;
+            }
+            match b {
+                b'<' => break,
+                b']' => {
+                    if self.pos + 2 < end && bytes[self.pos + 1] == b']' && bytes[self.pos + 2] == b'>'
+                    {
+                        return Err(StreamError::InvalidCharacterData);
+                    }
+                    self.pos += 1;
+                }
+                0xEF => self.check_ef_sequence()?,
+                _ => return Err(StreamError::NonXmlChar(b as char, self.gen_text_pos())),
+            }
+        }
+        Ok(())
+    }
+
+    /// Skips an attribute value until the closing quote, validating XML chars.
+    ///
+    /// Stops at `<` as well, which is not allowed inside attribute values.
+    pub(crate) fn skip_attr_value(&mut self, quote: u8) -> Result<()> {
+        let bytes = self.span.as_str().as_bytes();
+        let end = self.end;
+        while self.pos < end {
+            let b = bytes[self.pos];
+            if b == quote || b == b'<' {
+                break;
+            }
+            if TEXT_OK[b as usize] {
+                self.pos += 1;
+                continue;
+            }
+            match b {
+                b']' => self.pos += 1,
+                0xEF => self.check_ef_sequence()?,
+                _ => return Err(StreamError::NonXmlChar(b as char, self.gen_text_pos())),
+            }
+        }
+        Ok(())
+    }
+
     #[inline]
     pub(crate) fn chars(&self) -> str::Chars<'a> {
         self.span.as_str()[self.pos..self.end].chars()
@@ -495,7 +595,7 @@ impl<'a> Stream<'a> {
     /// # Errors
     ///
     /// - `InvalidName` - if name is empty or starts with an invalid char
-    #[inline(never)]
+    #[inline]
     pub fn consume_qname(&mut self) -> Result<(StrSpan<'a>, StrSpan<'a>)> {
         let start = self.pos;
 
@@ -503,28 +603,33 @@ impl<'a> Stream<'a> {
         let bytes = self.span.as_bytes();
         let end = self.end;
 
-        while self.pos < end {
+        loop {
+            // Fast scan over ASCII name bytes; specials handled below.
+            while self.pos < end && NAME_CLASS[bytes[self.pos] as usize] {
+                self.pos += 1;
+            }
+
+            if self.pos >= end {
+                break;
+            }
+
             let b = bytes[self.pos];
-            if b < 128 {
-                if b == b':' {
-                    if splitter.is_none() {
-                        splitter = Some(self.pos);
-                        self.pos += 1;
-                    } else {
-                        return Err(StreamError::InvalidName);
-                    }
-                } else if b.is_xml_name() {
+            if b == b':' {
+                if splitter.is_none() {
+                    splitter = Some(self.pos);
                     self.pos += 1;
                 } else {
-                    break;
+                    return Err(StreamError::InvalidName);
                 }
-            } else {
+            } else if b >= 128 {
                 match self.span.as_str()[self.pos..].chars().next() {
                     Some(c) if c.is_xml_name() => {
                         self.pos += c.len_utf8();
                     }
                     _ => break,
                 }
+            } else {
+                break;
             }
         }
 
