@@ -1,4 +1,4 @@
-extern crate xmlparser as xml;
+extern crate xmltok as xml;
 
 use crate::token::*;
 

@@ -1,11 +1,14 @@
 /*!
-*xmlparser* is a low-level, pull-based, zero-allocation
-[XML 1.0](https://www.w3.org/TR/xml/) parser.
+*xmltok* is a low-level, pull-based, zero-allocation
+[XML 1.0](https://www.w3.org/TR/xml/) tokenizer.
+
+It is a fork of [xmlparser](https://github.com/RazrFalcon/xmlparser) with compact,
+lifetime-free tokens: 20 bytes per `Token` instead of 112.
 
 ## Example
 
 ```rust
-for token in xmlparser::Tokenizer::from("<tagname name='value'/>") {
+for token in xmltok::Tokenizer::from("<tagname name='value'/>") {
     println!("{:?}", token);
 }
 ```
@@ -51,7 +54,7 @@ If you are looking for a higher level solution, check out
 */
 
 #![no_std]
-#![doc(html_root_url = "https://docs.rs/xmlparser/0.14.0")]
+#![doc(html_root_url = "https://docs.rs/xmltok/0.14.0")]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![allow(ellipsis_inclusive_range_patterns)]
@@ -531,7 +534,7 @@ macro_rules! map_err_at {
 impl<'a> Tokenizer<'a> {
     /// Enables document fragment parsing.
     ///
-    /// By default, `xmlparser` will check for DTD, root element, etc.
+    /// By default, `xmltok` will check for DTD, root element, etc.
     /// But if we have to parse an XML fragment, it will lead to an error.
     /// This method switches the parser to the root element content parsing mode,
     /// so it will treat any data as a content of the root element.

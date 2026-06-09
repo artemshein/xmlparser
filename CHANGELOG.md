@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ## [0.14.0] - 2026-06-10
+This fork is published on crates.io as `xmltok` starting with this release.
+
 ### Added
 - `Token::range()`, returning the document byte range of any token.
 - `StreamError::TokenTooLong`: markup tokens are limited to 64 KiB,

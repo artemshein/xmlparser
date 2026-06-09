@@ -14,7 +14,7 @@ fn main() {
     let data = std::fs::read_to_string(&path).unwrap();
 
     for _ in 0..iters / 4 + 20 {
-        black_box(xmlparser::Tokenizer::from(data.as_str()).filter_map(|t| t.ok()).collect::<Vec<_>>());
+        black_box(xmltok::Tokenizer::from(data.as_str()).filter_map(|t| t.ok()).collect::<Vec<_>>());
         black_box(xmlparser_upstream::Tokenizer::from(data.as_str()).filter_map(|t| t.ok()).collect::<Vec<_>>());
     }
 
@@ -23,7 +23,7 @@ fn main() {
     for _ in 0..rounds {
         let t = Instant::now();
         for _ in 0..iters {
-            black_box(xmlparser::Tokenizer::from(black_box(data.as_str())).filter_map(|t| t.ok()).collect::<Vec<_>>());
+            black_box(xmltok::Tokenizer::from(black_box(data.as_str())).filter_map(|t| t.ok()).collect::<Vec<_>>());
         }
         fork.push(t.elapsed().as_nanos());
         let t = Instant::now();

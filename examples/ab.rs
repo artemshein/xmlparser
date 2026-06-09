@@ -9,7 +9,7 @@ use std::hint::black_box;
 use std::time::Instant;
 
 fn count_fork(input: &str) -> usize {
-    xmlparser::Tokenizer::from(input).filter_map(|t| t.ok()).count()
+    xmltok::Tokenizer::from(input).filter_map(|t| t.ok()).count()
 }
 
 fn count_up(input: &str) -> usize {

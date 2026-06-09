@@ -1,6 +1,6 @@
-extern crate xmlparser;
+extern crate xmltok;
 
-use xmlparser::*;
+use xmltok::*;
 
 #[test]
 fn text_pos_1() {

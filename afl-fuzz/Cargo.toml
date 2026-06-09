@@ -5,4 +5,4 @@ authors = ["RazrFalcon <razrfalcon@gmail.com>"]
 
 [dependencies]
 afl = "0.18"
-xmlparser = { path = ".." }
+xmltok = { path = ".." }

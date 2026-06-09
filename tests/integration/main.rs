@@ -1,4 +1,4 @@
-extern crate xmlparser as xml;
+extern crate xmltok as xml;
 
 #[macro_use]
 mod token;

@@ -1,6 +1,11 @@
-## xmlparser (fork)
+# xmltok
 
-This is a fork of [RazrFalcon/xmlparser](https://github.com/RazrFalcon/xmlparser) with a focus on
+[![crates.io](https://img.shields.io/crates/v/xmltok.svg)](https://crates.io/crates/xmltok)
+[![docs.rs](https://img.shields.io/docsrs/xmltok)](https://docs.rs/xmltok)
+
+*xmltok* is a low-level, pull-based, zero-allocation XML 1.0 tokenizer.
+
+It is a fork of [RazrFalcon/xmlparser](https://github.com/RazrFalcon/xmlparser) with a focus on
 reducing memory consumption and removing the lifetime parameter from `Token`.
 
 ### Differences from upstream
@@ -79,6 +84,8 @@ cargo run --release --example ab_collect [fixture.xml]
 Criterion benchmarks live in `benches/tokenize.rs` (`cargo bench`).
 
 ---
+
+Original upstream README below.
 
 # xmlparser
 

@@ -1,14 +1,14 @@
 [package]
-name = "xmlparser"
+name = "xmltok"
 version = "0.14.0"
-authors = ["Yevhenii Reizner <razrfalcon@gmail.com>"]
+authors = ["Yevhenii Reizner <razrfalcon@gmail.com>", "Artem Shein <artem.shein.de@gmail.com>"]
 edition = "2024"
 rust-version = "1.85"
-description = "Pull-based, zero-allocation XML parser."
-documentation = "https://docs.rs/xmlparser"
+description = "Pull-based, zero-allocation XML tokenizer with compact, lifetime-free tokens. A fork of xmlparser."
+documentation = "https://docs.rs/xmltok"
 readme = "README.md"
-homepage = "https://github.com/RazrFalcon/xmlparser"
-repository = "https://github.com/RazrFalcon/xmlparser"
+homepage = "https://github.com/artemshein/xmlparser"
+repository = "https://github.com/artemshein/xmlparser"
 license = "MIT OR Apache-2.0"
 keywords = ["parser", "tokenizer", "xml"]
 categories = ["parser-implementations"]

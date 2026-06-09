@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 fn tokenize_fork(input: &str) -> usize {
-    xmlparser::Tokenizer::from(input)
+    xmltok::Tokenizer::from(input)
         .filter_map(|t| t.ok())
         .count()
 }
@@ -12,8 +12,8 @@ fn tokenize_upstream(input: &str) -> usize {
         .count()
 }
 
-fn collect_fork(input: &str) -> Vec<xmlparser::Token> {
-    xmlparser::Tokenizer::from(input)
+fn collect_fork(input: &str) -> Vec<xmltok::Token> {
+    xmltok::Tokenizer::from(input)
         .filter_map(|t| t.ok())
         .collect()
 }
@@ -94,11 +94,11 @@ fn bench_collect(c: &mut Criterion) {
 }
 
 fn bench_token_sizes(_c: &mut Criterion) {
-    let fork_token = std::mem::size_of::<xmlparser::Token>();
+    let fork_token = std::mem::size_of::<xmltok::Token>();
     let upstream_token = std::mem::size_of::<xmlparser_upstream::Token<'_>>();
 
     let dense = load("dense.xml");
-    let fork_tokens: Vec<_> = xmlparser::Tokenizer::from(dense.as_str())
+    let fork_tokens: Vec<_> = xmltok::Tokenizer::from(dense.as_str())
         .filter_map(|t| t.ok())
         .collect();
     let upstream_tokens: Vec<_> = xmlparser_upstream::Tokenizer::from(dense.as_str())
