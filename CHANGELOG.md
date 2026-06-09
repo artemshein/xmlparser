@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-06-10
+### Added
+- `Token::range()`, returning the document byte range of any token.
+- `StreamError::TokenTooLong`: markup tokens are limited to 64 KiB,
+  text/CDATA/comment tokens to 4 GiB, enforced with an error.
+- `StreamError::DocumentTooLarge`: documents are limited to 4 GiB.
+- Span-limit regression tests (`tests/integration/limits.rs`).
+- Interleaved A/B benchmark harnesses (`examples/ab.rs`,
+  `examples/ab_collect.rs`).
+
+### Changed
+- `Token` shrunk from 24 to 20 bytes: `start` is stored as `u32` and the
+  `ElementStart`, `Attribute`, `Text`, `Comment` and `Cdata` variants no
+  longer store an `end` offset; it is derived from their last sub-span.
+- Hot paths (qualified names, text, attribute values) rewritten with
+  byte-table scanning instead of per-`char` decoding. 24-30% faster than
+  upstream 0.13.6 when streaming, 40-53% faster when collecting tokens.
+- Comments are parsed in a single pass.
+- `detach()`/`detach_small()` keep real offsets for empty spans;
+  only placeholder spans map to `0..0`.
+- Bumped to edition 2024, MSRV 1.85.
+
+### Fixed
+- Silent span truncation for tokens longer than 64 KiB: a 70 KB attribute
+  value used to tokenize without error and yield wrong span data.
+- `Stream::starts_with` no longer matches text beyond the fragment end
+  during fragment parsing.
+- `Stream::advance` doctest under `cargo test --release`.
+
+
 ## [0.13.6] - 2023-09-30
 ### Added
 - `Token::span`, `Tokenizer::stream` and allow cloning of `Tokenizer`.

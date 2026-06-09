@@ -51,7 +51,7 @@ If you are looking for a higher level solution, check out
 */
 
 #![no_std]
-#![doc(html_root_url = "https://docs.rs/xmlparser/0.13.4")]
+#![doc(html_root_url = "https://docs.rs/xmlparser/0.14.0")]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![allow(ellipsis_inclusive_range_patterns)]

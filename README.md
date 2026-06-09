@@ -14,19 +14,27 @@ This fork replaces `StrSpan<'a>` fields inside tokens with two offset-only types
 
 - **`SmallDetachedStrSpan`** — stores `start` and `end` as `u16` values relative to the token's
   own `start` offset. Used for short in-token strings (tag names, attribute names/values, etc.).
-- **`DetachedStrSpan`** — stores `start` and `end` as `u32` absolute offsets. Used where `u16`
-  would overflow.
+- **`DetachedStrSpan`** — stores `start` and `end` as `u32` values relative to the token's
+  own `start` offset. Used where `u16` would overflow (text, CDATA, comments).
 
-Each token stores one absolute `start: usize` position and a `end: u16` length. All string spans
-inside the token are relative to that `start`, so no pointer is stored. To recover a `&str` you
-call `span.as_str(full_text, token_start)`.
+Each token stores one absolute `start: u32` position. Most variants store an `end: u16` length;
+`ElementStart`, `Attribute`, `Text`, `Comment` and `Cdata` store no end at all — it is derived
+from their last sub-span by `Token::range()`. All string spans inside a token are relative to its
+`start`, so no pointer is stored. To recover a `&str` you call
+`span.as_str(full_text, token_start as usize)`.
 
-The result is that `Token` has no lifetime parameter, is `Copy + 'static`, and the token enum
-variants are significantly smaller in memory.
+The result is that `Token` has no lifetime parameter, is `Copy + 'static`, and 20 bytes instead
+of upstream's 112.
+
+The compact representation imposes documented limits, enforced with parse errors instead of
+silent truncation: markup tokens (declaration, PI, DOCTYPE, ENTITY, element start/end,
+attribute) are limited to 64 KiB each, text/CDATA/comment tokens and the whole document
+to 4 GiB.
 
 ### Benchmarks
 
-Measured on Apple Silicon (aarch64) with Rust 1.96. Three XML fixtures:
+Measured on Apple Silicon (aarch64) with Rust 1.96 against `xmlparser` 0.13.6 (the latest
+crates.io release, identical to upstream master). Four XML fixtures:
 - **dense** — 44 KB, compact elements, minimal whitespace
 - **spaced** — 66 KB, heavy inter-element whitespace
 - **dtd** — 12 KB, DOCTYPE with 50 ENTITY declarations, comments, and processing instructions
@@ -34,41 +42,41 @@ Measured on Apple Silicon (aarch64) with Rust 1.96. Three XML fixtures:
 
 #### Token memory footprint
 
-| | This fork | Upstream |
+| | This fork | Upstream 0.13.6 |
 |---|---|---|
-| `size_of::<Token>()` | **24 bytes** | 112 bytes |
-| 10.5 M tokens (1 GB file) | **240 MB** | 1 120 MB |
-| Savings | **−88 bytes/token (78.6%)** | — |
-
-The fork stores two `u16` offsets per span relative to the token start; upstream stores a full
-`&str` (pointer + length = 16 bytes) per span.
+| `size_of::<Token>()` | **20 bytes** | 112 bytes |
+| 10.5 M tokens (1 GB file) | **210 MB** | 1 120 MB |
+| Savings per token | **−92 bytes (82%)** | — |
 
 #### Streaming throughput (tokens counted, nothing stored)
 
-| File | Fork | Upstream | Δ |
+| File | Fork | Upstream 0.13.6 | Δ |
 |---|---|---|---|
-| dense (44 KB) | 453 MiB/s | 440 MiB/s | **+3%** |
-| spaced (66 KB) | 503 MiB/s | 496 MiB/s | **+2%** |
-| dtd (12 KB) | 474 MiB/s | 445 MiB/s | **+6%** |
-| large (1 GB) | 487 MiB/s | 476 MiB/s | **+2.5%** |
+| dense (44 KB) | 536 MiB/s | 434 MiB/s | **+24%** |
+| spaced (66 KB) | 628 MiB/s | 485 MiB/s | **+30%** |
+| dtd (12 KB) | 582 MiB/s | 450 MiB/s | **+29%** |
+| large (1 GB) | 594 MiB/s | 457 MiB/s | **+30%** |
 
 #### Collect throughput (`Vec<Token>` allocation included)
 
-| File | Fork | Upstream | Δ |
+| File | Fork | Upstream 0.13.6 | Δ |
 |---|---|---|---|
-| dense (44 KB) | 424 MiB/s | 342 MiB/s | **+24%** |
-| spaced (66 KB) | 471 MiB/s | 400 MiB/s | **+18%** |
-| dtd (12 KB) | 433 MiB/s | 358 MiB/s | **+21%** |
+| dense (44 KB) | 498 MiB/s | 356 MiB/s | **+40%** |
+| spaced (66 KB) | 624 MiB/s | 408 MiB/s | **+53%** |
+| dtd (12 KB) | 535 MiB/s | 379 MiB/s | **+41%** |
 
-The streaming gap (~2–6%) reflects smaller tokens fitting better in registers. The collect gap
-(~18–24%) is driven directly by the 4.7× smaller `Vec` — less memory to allocate, write, and
-grow during reallocation.
+The streaming gap comes from byte-table scanning in the hot paths (qualified names, text,
+attribute values, comments). The collect gap additionally benefits from the 5.6× smaller
+`Vec` — less memory to allocate, write, and grow during reallocation.
 
-Benchmarks live in `benches/tokenize.rs` and can be reproduced with:
+Numbers are medians from the interleaved A/B harnesses, which are stable run-to-run:
 
 ```
-cargo bench
+cargo run --release --example ab [fixture.xml]
+cargo run --release --example ab_collect [fixture.xml]
 ```
+
+Criterion benchmarks live in `benches/tokenize.rs` (`cargo bench`).
 
 ---
 

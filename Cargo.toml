@@ -1,6 +1,6 @@
 [package]
 name = "xmlparser"
-version = "0.13.6"
+version = "0.14.0"
 authors = ["Yevhenii Reizner <razrfalcon@gmail.com>"]
 edition = "2024"
 rust-version = "1.85"
