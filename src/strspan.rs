@@ -120,12 +120,17 @@ impl<'a> StrSpan<'a> {
     }
 
     /// Make a detached span for span
+    ///
+    /// The caller must guarantee that the span ends within `u32::MAX` bytes
+    /// of `offset`. The tokenizer ensures this by validating the total token
+    /// length (see `token_end32`) before detaching any of its sub-spans.
     pub fn detach(&self, offset: usize) -> DetachedStrSpan {
         if self.start == self.end() {
             return DetachedStrSpan { start: 0, end: 0 };
         }
         debug_assert!(offset <= self.start);
         debug_assert!(self.end() >= self.start);
+        debug_assert!(self.end() - offset <= u32::MAX as usize);
         DetachedStrSpan {
             start: (self.start - offset) as u32,
             end: (self.end() - offset) as u32,
@@ -133,12 +138,17 @@ impl<'a> StrSpan<'a> {
     }
 
     /// Make a detached span for span
+    ///
+    /// The caller must guarantee that the span ends within `u16::MAX` bytes
+    /// of `offset`. The tokenizer ensures this by validating the total token
+    /// length (see `token_end16`) before detaching any of its sub-spans.
     pub fn detach_small(&self, offset: usize) -> SmallDetachedStrSpan {
         if self.start == self.end() {
             return SmallDetachedStrSpan { start: 0, end: 0 };
         }
         debug_assert!(offset <= self.start);
         debug_assert!(self.end() >= self.start);
+        debug_assert!(self.end() - offset <= u16::MAX as usize);
         SmallDetachedStrSpan {
             start: (self.start - offset) as u16,
             end: (self.end() - offset) as u16,

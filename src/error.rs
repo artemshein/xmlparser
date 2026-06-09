@@ -143,6 +143,13 @@ pub enum StreamError {
     ///
     /// Currently, only `]]>` is not allowed.
     InvalidCharacterData,
+
+    /// A token is too long for its compact span representation.
+    ///
+    /// Markup tokens (declaration, PI, DOCTYPE, ENTITY, element start/end,
+    /// attribute) are limited to 65535 bytes each.
+    /// Text, CDATA and comment tokens are limited to 4 GiB each.
+    TokenTooLong,
 }
 
 impl fmt::Display for StreamError {
@@ -199,6 +206,9 @@ impl fmt::Display for StreamError {
             }
             StreamError::InvalidCharacterData => {
                 write!(f, "']]>' is not allowed inside a character data")
+            }
+            StreamError::TokenTooLong => {
+                write!(f, "token is too long")
             }
         }
     }

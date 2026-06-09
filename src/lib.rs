@@ -37,6 +37,10 @@ If you are looking for a higher level solution, check out
 - Duplicated attributes is not an error. So XML like `<item a="v1" a="v2"/>`
   will be parsed without errors. You should check for this manually.
 - UTF-8 only.
+- Markup tokens (declaration, processing instruction, DOCTYPE, ENTITY,
+  element start/end, attribute) are limited to 65535 bytes each;
+  text, CDATA and comment tokens to 4 GiB each. Longer tokens produce
+  a parsing error. This is the cost of the compact `Token` representation.
 
 ## Safety
 
@@ -393,6 +397,35 @@ pub enum EntityDefinition {
 type Result<T> = core::result::Result<T, Error>;
 type StreamResult<T> = core::result::Result<T, StreamError>;
 
+// Checked token length for tokens with `end: u16`.
+//
+// Since every detached sub-span of a token lies within `start..s.pos()`,
+// a successful check here also guarantees that all `detach_small()` casts
+// for this token are lossless.
+#[inline]
+fn token_end16(s: &Stream, start: usize) -> StreamResult<u16> {
+    u16::try_from(s.pos() - start).map_err(|_| StreamError::TokenTooLong)
+}
+
+// Checked token length for tokens with `end: u32`. See `token_end16`.
+#[inline]
+fn token_end32(s: &Stream, start: usize) -> StreamResult<u32> {
+    u32::try_from(s.pos() - start).map_err(|_| StreamError::TokenTooLong)
+}
+
+// Checked `detach_small` for sub-spans that are detached before the total
+// token length is known (DOCTYPE external IDs, entity definitions).
+#[inline]
+fn detach_small_checked(
+    span: StrSpan<'_>,
+    start: usize,
+) -> StreamResult<SmallDetachedStrSpan> {
+    if span.end() - start > u16::MAX as usize {
+        return Err(StreamError::TokenTooLong);
+    }
+    Ok(span.detach_small(start))
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum State {
     Declaration,
@@ -526,10 +559,12 @@ impl<'a> Tokenizer<'a> {
                         Ok(b'>') => {
                             self.state = State::AfterDtd;
                             s.advance(1);
-                            Some(Ok(Token::DtdEnd {
-                                start,
-                                end: (s.pos() - start) as u16,
-                            }))
+                            Some(match token_end16(s, start) {
+                                Ok(end) => Ok(Token::DtdEnd { start, end }),
+                                Err(e) => {
+                                    Err(Error::InvalidDoctype(e, s.gen_text_pos_from(start)))
+                                }
+                            })
                         }
                         Ok(c) => {
                             let e = StreamError::InvalidChar(c, b'>', s.gen_text_pos());
@@ -693,6 +728,7 @@ impl<'a> Tokenizer<'a> {
         s.skip_spaces();
         s.skip_string(b"?>")?;
 
+        let end = token_end16(s, start)?;
         Ok(Token::Declaration {
             start,
             version: version.detach_small(start),
@@ -700,7 +736,7 @@ impl<'a> Tokenizer<'a> {
                 .map(|e| e.detach_small(start))
                 .unwrap_or_else(SmallDetachedStrSpan::empty),
             standalone,
-            end: (s.pos() - start) as u16,
+            end,
         })
     }
 
@@ -791,9 +827,10 @@ impl<'a> Tokenizer<'a> {
             return Err(StreamError::InvalidCommentEnd);
         }
 
+        let end = token_end32(s, start)?;
         Ok(Token::Comment {
             start,
-            end: (s.pos() - start) as u32,
+            end,
             text: text.detach(start),
         })
     }
@@ -818,9 +855,10 @@ impl<'a> Tokenizer<'a> {
 
         s.skip_string(b"?>")?;
 
+        let end = token_end16(s, start)?;
         Ok(Token::ProcessingInstruction {
             start,
-            end: (s.pos() - start) as u16,
+            end,
             target: target.detach_small(start),
             content: content
                 .map(|c| c.detach_small(start))
@@ -856,22 +894,23 @@ impl<'a> Tokenizer<'a> {
 
         s.advance(1);
 
+        let end = token_end16(s, start)?;
         if c == b'[' {
             Ok(match external_id {
                 None => Token::DtdStartNoExternalId {
                     start,
-                    end: (s.pos() - start) as u16,
+                    end,
                     name: name.detach_small(start),
                 },
                 Some(ExternalId::System(ext_id)) => Token::DtdStartSystemExternalId {
                     start,
-                    end: (s.pos() - start) as u16,
+                    end,
                     name: name.detach_small(start),
                     external_id: ext_id,
                 },
                 Some(ExternalId::Public(p1, p2)) => Token::DtdStartPublicExternalId {
                     start,
-                    end: (s.pos() - start) as u16,
+                    end,
                     name: name.detach_small(start),
                     public1: p1,
                     public2: p2,
@@ -881,18 +920,18 @@ impl<'a> Tokenizer<'a> {
             Ok(match external_id {
                 None => Token::EmptyDtdNoExternalId {
                     start,
-                    end: (s.pos() - start) as u16,
+                    end,
                     name: name.detach_small(start),
                 },
                 Some(ExternalId::System(ext_id)) => Token::EmptyDtdSystemExternalId {
                     start,
-                    end: (s.pos() - start) as u16,
+                    end,
                     name: name.detach_small(start),
                     external_id: ext_id,
                 },
                 Some(ExternalId::Public(p1, p2)) => Token::EmptyDtdPublicExternalId {
                     start,
-                    end: (s.pos() - start) as u16,
+                    end,
                     name: name.detach_small(start),
                     public1: p1,
                     public2: p2,
@@ -914,14 +953,17 @@ impl<'a> Tokenizer<'a> {
             s.consume_byte(quote)?;
 
             let v = if id.as_str() == "SYSTEM" {
-                ExternalId::System(literal1.detach_small(start))
+                ExternalId::System(detach_small_checked(literal1, start)?)
             } else {
                 s.consume_spaces()?;
                 let quote = s.consume_quote()?;
                 let literal2 = s.consume_bytes(|_, c| c != quote);
                 s.consume_byte(quote)?;
 
-                ExternalId::Public(literal1.detach_small(start), literal2.detach_small(start))
+                ExternalId::Public(
+                    detach_small_checked(literal1, start)?,
+                    detach_small_checked(literal2, start)?,
+                )
             };
 
             Some(v)
@@ -958,17 +1000,18 @@ impl<'a> Tokenizer<'a> {
         s.skip_spaces();
         s.consume_byte(b'>')?;
 
+        let end = token_end16(s, start)?;
         Ok(match definition {
             EntityDefinition::EntityValue(entity_value) => Token::EntityDeclarationEntityValue {
                 start,
-                end: (s.pos() - start) as u16,
+                end,
                 name: name.detach_small(start),
                 entity_value,
             },
             EntityDefinition::ExternalId(ExternalId::System(ext_id)) => {
                 Token::EntityDeclarationSystemExternalId {
                     start,
-                    end: (s.pos() - start) as u16,
+                    end,
                     name: name.detach_small(start),
                     external_id: ext_id,
                 }
@@ -976,7 +1019,7 @@ impl<'a> Tokenizer<'a> {
             EntityDefinition::ExternalId(ExternalId::Public(p1, p2)) => {
                 Token::EntityDeclarationPublicExternalId {
                     start,
-                    end: (s.pos() - start) as u16,
+                    end,
                     name: name.detach_small(start),
                     public1: p1,
                     public2: p2,
@@ -1003,7 +1046,9 @@ impl<'a> Tokenizer<'a> {
                 let value = s.consume_bytes(|_, c| c != quote);
                 s.consume_byte(quote)?;
 
-                Ok(EntityDefinition::EntityValue(value.detach_small(start)))
+                Ok(EntityDefinition::EntityValue(detach_small_checked(
+                    value, start,
+                )?))
             }
             b'S' | b'P' => {
                 if let Some(id) = Self::parse_external_id(s, start)? {
@@ -1049,9 +1094,10 @@ impl<'a> Tokenizer<'a> {
         s.advance(9);
         let text = s.consume_chars(|s, c| !(c == ']' && s.starts_with(b"]]>")))?;
         s.skip_string(b"]]>")?;
+        let end = token_end32(s, start)?;
         Ok(Token::Cdata {
             start,
-            end: (s.pos() - start) as u32,
+            end,
             text: text.detach(start),
         })
     }
@@ -1065,9 +1111,10 @@ impl<'a> Tokenizer<'a> {
         let start = s.pos();
         s.advance(1);
         let (prefix, local) = s.consume_qname()?;
+        let end = token_end16(s, start)?;
         Ok(Token::ElementStart {
             start,
-            end: (s.pos() - start) as u16,
+            end,
             prefix: prefix.detach_small(start),
             local: local.detach_small(start),
         })
@@ -1085,9 +1132,10 @@ impl<'a> Tokenizer<'a> {
         let (prefix, tag_name) = s.consume_qname()?;
         s.skip_spaces();
         s.consume_byte(b'>')?;
+        let end = token_end16(s, start)?;
         Ok(Token::ElementEnd {
             start,
-            end: (s.pos() - start) as u16,
+            end,
             el_end: ElementEnd::Close(prefix.detach_small(start), tag_name.detach_small(start)),
         })
     }
@@ -1107,7 +1155,7 @@ impl<'a> Tokenizer<'a> {
                     s.consume_byte(b'>')?;
                     return Ok(Token::ElementEnd {
                         start,
-                        end: (s.pos() - start) as u16,
+                        end: token_end16(s, start)?,
                         el_end: ElementEnd::Empty,
                     });
                 }
@@ -1115,7 +1163,7 @@ impl<'a> Tokenizer<'a> {
                     s.advance(1);
                     return Ok(Token::ElementEnd {
                         start,
-                        end: (s.pos() - start) as u16,
+                        end: token_end16(s, start)?,
                         el_end: ElementEnd::Open,
                     });
                 }
@@ -1144,9 +1192,10 @@ impl<'a> Tokenizer<'a> {
         let value = s.consume_chars(|_, c| c != quote_c && c != '<')?;
         s.consume_byte(quote)?;
 
+        let end = token_end16(s, start)?;
         Ok(Token::Attribute {
             start,
-            end: (s.pos() - start) as u16,
+            end,
             prefix: prefix.detach_small(start),
             local: local.detach_small(start),
             value: value.detach_small(start),
@@ -1169,9 +1218,10 @@ impl<'a> Tokenizer<'a> {
             return Err(StreamError::InvalidCharacterData);
         }
 
+        let end = token_end32(s, start)?;
         Ok(Token::Text {
             start,
-            end: (s.pos() - start) as u32,
+            end,
             text: text.detach(start),
         })
     }

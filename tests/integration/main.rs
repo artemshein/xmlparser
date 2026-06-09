@@ -9,5 +9,6 @@ mod comments;
 mod doctype;
 mod document;
 mod elements;
+mod limits;
 mod pi;
 mod text;
