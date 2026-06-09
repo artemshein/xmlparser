@@ -816,16 +816,10 @@ impl<'a> Tokenizer<'a> {
     fn parse_comment_impl(s: &mut Stream<'a>) -> StreamResult<Token> {
         let start = s.pos();
         s.advance(4);
-        let text = s.consume_chars(|s, c| !(c == '-' && s.starts_with(b"-->")))?;
+        let text_start = s.pos();
+        s.skip_comment_text()?;
+        let text = s.slice_back(text_start);
         s.skip_string(b"-->")?;
-
-        if text.as_str().contains("--") {
-            return Err(StreamError::InvalidCommentData);
-        }
-
-        if text.as_str().ends_with('-') {
-            return Err(StreamError::InvalidCommentEnd);
-        }
 
         let end = token_end32(s, start)?;
         Ok(Token::Comment {

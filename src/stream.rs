@@ -41,6 +41,25 @@ const fn build_text_ok() -> [bool; 256] {
 }
 static TEXT_OK: [bool; 256] = build_text_ok();
 
+// Bytes that can appear in comment text without further checks.
+// Excluded: controls other than \t \n \r, '-' (terminator and '--'
+// detection), 0xEF (may start U+FFFE/U+FFFF).
+const fn build_comment_ok() -> [bool; 256] {
+    let mut t = [true; 256];
+    let mut i = 0;
+    while i < 0x20 {
+        t[i] = false;
+        i += 1;
+    }
+    t[b'\t' as usize] = true;
+    t[b'\n' as usize] = true;
+    t[b'\r' as usize] = true;
+    t[b'-' as usize] = false;
+    t[0xEF] = false;
+    t
+}
+static COMMENT_OK: [bool; 256] = build_comment_ok();
+
 /// Representation of the [Reference](https://www.w3.org/TR/xml/#NT-Reference) value.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Reference<'a> {
@@ -380,6 +399,64 @@ impl<'a> Stream<'a> {
                         return Err(StreamError::InvalidCharacterData);
                     }
                     self.pos += 1;
+                }
+                0xEF => self.check_ef_sequence()?,
+                _ => return Err(StreamError::NonXmlChar(b as char, self.gen_text_pos())),
+            }
+        }
+        Ok(())
+    }
+
+    /// Skips comment text, stopping right before the closing `-->`.
+    ///
+    /// A single pass detects `--` inside the text (`InvalidCommentData`),
+    /// text ending with `-` (`InvalidCommentEnd`) and non-XML chars.
+    /// If there is no `-->` terminator at all, everything is consumed and
+    /// the caller's `skip_string(b"-->")` reports the error.
+    pub(crate) fn skip_comment_text(&mut self) -> Result<()> {
+        let bytes = self.span.as_str().as_bytes();
+        let end = self.end;
+        let mut saw_double_dash = false;
+        while self.pos < end {
+            let b = bytes[self.pos];
+            if COMMENT_OK[b as usize] {
+                self.pos += 1;
+                continue;
+            }
+            match b {
+                b'-' => {
+                    if self.pos + 1 < end && bytes[self.pos + 1] == b'-' {
+                        // A run of dashes; find where it ends.
+                        let p = self.pos;
+                        let mut q = p + 2;
+                        while q < end && bytes[q] == b'-' {
+                            q += 1;
+                        }
+                        if q < end && bytes[q] == b'>' {
+                            // "-->" found; the text ends two dashes before it,
+                            // so longer runs leave dashes inside the text.
+                            if saw_double_dash || q - p >= 4 {
+                                return Err(StreamError::InvalidCommentData);
+                            }
+                            if q - p == 3 {
+                                return Err(StreamError::InvalidCommentEnd);
+                            }
+                            self.pos = q - 2;
+                            return Ok(());
+                        }
+                        if q >= end {
+                            // Unterminated comment ending in dashes.
+                            self.pos = q;
+                            return Ok(());
+                        }
+                        // "--" inside the text. The error is deferred until
+                        // the terminator is found, matching the old two-pass
+                        // behavior for unterminated comments.
+                        saw_double_dash = true;
+                        self.pos = q;
+                    } else {
+                        self.pos += 1;
+                    }
                 }
                 0xEF => self.check_ef_sequence()?,
                 _ => return Err(StreamError::NonXmlChar(b as char, self.gen_text_pos())),
