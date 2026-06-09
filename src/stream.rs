@@ -382,6 +382,7 @@ impl<'a> Stream<'a> {
     }
 
     /// Skips character data until `<`, validating XML chars and rejecting `]]>`.
+    #[inline]
     pub(crate) fn skip_text_content(&mut self) -> Result<()> {
         let bytes = self.span.as_str().as_bytes();
         let end = self.end;
@@ -394,7 +395,9 @@ impl<'a> Stream<'a> {
             match b {
                 b'<' => break,
                 b']' => {
-                    if self.pos + 2 < end && bytes[self.pos + 1] == b']' && bytes[self.pos + 2] == b'>'
+                    if self.pos + 2 < end
+                        && bytes[self.pos + 1] == b']'
+                        && bytes[self.pos + 2] == b'>'
                     {
                         return Err(StreamError::InvalidCharacterData);
                     }
@@ -413,6 +416,7 @@ impl<'a> Stream<'a> {
     /// text ending with `-` (`InvalidCommentEnd`) and non-XML chars.
     /// If there is no `-->` terminator at all, everything is consumed and
     /// the caller's `skip_string(b"-->")` reports the error.
+    #[inline]
     pub(crate) fn skip_comment_text(&mut self) -> Result<()> {
         let bytes = self.span.as_str().as_bytes();
         let end = self.end;
@@ -468,6 +472,7 @@ impl<'a> Stream<'a> {
     /// Skips an attribute value until the closing quote, validating XML chars.
     ///
     /// Stops at `<` as well, which is not allowed inside attribute values.
+    #[inline]
     pub(crate) fn skip_attr_value(&mut self, quote: u8) -> Result<()> {
         let bytes = self.span.as_str().as_bytes();
         let end = self.end;

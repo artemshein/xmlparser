@@ -125,10 +125,14 @@ impl<'a> StrSpan<'a> {
     /// of `offset`. The tokenizer ensures this by validating the total token
     /// length (see `token_end32`) before detaching any of its sub-spans.
     pub fn detach(&self, offset: usize) -> DetachedStrSpan {
-        if self.start == self.end() {
+        if self.start < offset {
+            // Placeholder spans created via `"".into()` (e.g. a missing
+            // qname prefix) carry no real position; map them to 0..0.
+            // Empty spans at real positions keep their offsets, so token
+            // end positions stay derivable from their last sub-span.
+            debug_assert!(self.is_empty());
             return DetachedStrSpan { start: 0, end: 0 };
         }
-        debug_assert!(offset <= self.start);
         debug_assert!(self.end() >= self.start);
         debug_assert!(self.end() - offset <= u32::MAX as usize);
         DetachedStrSpan {
@@ -143,10 +147,12 @@ impl<'a> StrSpan<'a> {
     /// of `offset`. The tokenizer ensures this by validating the total token
     /// length (see `token_end16`) before detaching any of its sub-spans.
     pub fn detach_small(&self, offset: usize) -> SmallDetachedStrSpan {
-        if self.start == self.end() {
+        if self.start < offset {
+            // See `detach()`: placeholder spans map to 0..0, real empty
+            // spans keep their offsets.
+            debug_assert!(self.is_empty());
             return SmallDetachedStrSpan { start: 0, end: 0 };
         }
-        debug_assert!(offset <= self.start);
         debug_assert!(self.end() >= self.start);
         debug_assert!(self.end() - offset <= u16::MAX as usize);
         SmallDetachedStrSpan {

@@ -54,189 +54,221 @@ macro_rules! test {
 
 #[inline(never)]
 pub fn to_test_token(token: Result<xml::Token, xml::Error>, text: &str) -> Token<'_> {
-    match token {
-        Ok(xml::Token::Declaration {
+    let tok = match token {
+        Ok(t) => t,
+        Err(ref e) => return Token::Error(e.to_string()),
+    };
+
+    // Token spans are validated through range(), which derives the end
+    // offset from the last sub-span for variants that do not store it.
+    let range = tok.range();
+
+    match tok {
+        xml::Token::Declaration {
             start,
             version,
             encoding,
             standalone,
-            end,
-        }) => Token::Declaration(
-            version.as_str(text, start),
-            if encoding.is_empty() {
-                None
-            } else {
-                Some(encoding.as_str(text, start))
-            },
-            standalone,
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::ProcessingInstruction {
+            ..
+        } => {
+            let start = start as usize;
+            Token::Declaration(
+                version.as_str(text, start),
+                if encoding.is_empty() {
+                    None
+                } else {
+                    Some(encoding.as_str(text, start))
+                },
+                standalone,
+                range,
+            )
+        }
+        xml::Token::ProcessingInstruction {
             start,
-            end,
             target,
             content,
-        }) => Token::PI(
-            target.as_str(text, start),
-            if content.is_empty() {
-                None
-            } else {
-                Some(content.as_str(text, start))
-            },
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::Comment {
-            start,
-            end,
-            text: text_,
-        }) => Token::Comment(text_.as_str(text, start), start..start + end as usize),
-        Ok(xml::Token::DtdStartNoExternalId { start, end, name }) => {
-            Token::DtdStart(name.as_str(text, start), None, start..start + end as usize)
+            ..
+        } => {
+            let start = start as usize;
+            Token::PI(
+                target.as_str(text, start),
+                if content.is_empty() {
+                    None
+                } else {
+                    Some(content.as_str(text, start))
+                },
+                range,
+            )
         }
-        Ok(xml::Token::DtdStartSystemExternalId {
+        xml::Token::Comment { start, text: text_ } => {
+            Token::Comment(text_.as_str(text, start as usize), range)
+        }
+        xml::Token::DtdStartNoExternalId { start, name, .. } => {
+            Token::DtdStart(name.as_str(text, start as usize), None, range)
+        }
+        xml::Token::DtdStartSystemExternalId {
             start,
-            end,
             name,
             external_id,
-        }) => Token::DtdStart(
-            name.as_str(text, start),
-            Some(to_test_external_id(
-                xml::ExternalId::System(external_id),
-                text,
-                start,
-            )),
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::DtdStartPublicExternalId {
+            ..
+        } => {
+            let start = start as usize;
+            Token::DtdStart(
+                name.as_str(text, start),
+                Some(to_test_external_id(
+                    xml::ExternalId::System(external_id),
+                    text,
+                    start,
+                )),
+                range,
+            )
+        }
+        xml::Token::DtdStartPublicExternalId {
             start,
-            end,
             name,
             public1,
             public2,
-        }) => Token::DtdStart(
-            name.as_str(text, start),
-            Some(to_test_external_id(
-                xml::ExternalId::Public(public1, public2),
-                text,
-                start,
-            )),
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::EmptyDtdNoExternalId { start, end, name }) => {
-            Token::EmptyDtd(name.as_str(text, start), None, start..start + end as usize)
+            ..
+        } => {
+            let start = start as usize;
+            Token::DtdStart(
+                name.as_str(text, start),
+                Some(to_test_external_id(
+                    xml::ExternalId::Public(public1, public2),
+                    text,
+                    start,
+                )),
+                range,
+            )
         }
-        Ok(xml::Token::EmptyDtdSystemExternalId {
+        xml::Token::EmptyDtdNoExternalId { start, name, .. } => {
+            Token::EmptyDtd(name.as_str(text, start as usize), None, range)
+        }
+        xml::Token::EmptyDtdSystemExternalId {
             start,
-            end,
             name,
             external_id,
-        }) => Token::EmptyDtd(
-            name.as_str(text, start),
-            Some(to_test_external_id(
-                xml::ExternalId::System(external_id),
-                text,
-                start,
-            )),
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::EmptyDtdPublicExternalId {
+            ..
+        } => {
+            let start = start as usize;
+            Token::EmptyDtd(
+                name.as_str(text, start),
+                Some(to_test_external_id(
+                    xml::ExternalId::System(external_id),
+                    text,
+                    start,
+                )),
+                range,
+            )
+        }
+        xml::Token::EmptyDtdPublicExternalId {
             start,
-            end,
             name,
             public1,
             public2,
-        }) => Token::EmptyDtd(
-            name.as_str(text, start),
-            Some(to_test_external_id(
-                xml::ExternalId::Public(public1, public2),
-                text,
-                start,
-            )),
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::EntityDeclarationEntityValue {
+            ..
+        } => {
+            let start = start as usize;
+            Token::EmptyDtd(
+                name.as_str(text, start),
+                Some(to_test_external_id(
+                    xml::ExternalId::Public(public1, public2),
+                    text,
+                    start,
+                )),
+                range,
+            )
+        }
+        xml::Token::EntityDeclarationEntityValue {
             start,
-            end,
             name,
             entity_value,
-        }) => Token::EntityDecl(
-            name.as_str(text, start),
-            EntityDefinition::EntityValue(entity_value.as_str(text, start)),
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::EntityDeclarationSystemExternalId {
+            ..
+        } => {
+            let start = start as usize;
+            Token::EntityDecl(
+                name.as_str(text, start),
+                EntityDefinition::EntityValue(entity_value.as_str(text, start)),
+                range,
+            )
+        }
+        xml::Token::EntityDeclarationSystemExternalId {
             start,
-            end,
             name,
             external_id,
-        }) => Token::EntityDecl(
-            name.as_str(text, start),
-            EntityDefinition::ExternalId(to_test_external_id(
-                xml::ExternalId::System(external_id),
-                text,
-                start,
-            )),
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::EntityDeclarationPublicExternalId {
+            ..
+        } => {
+            let start = start as usize;
+            Token::EntityDecl(
+                name.as_str(text, start),
+                EntityDefinition::ExternalId(to_test_external_id(
+                    xml::ExternalId::System(external_id),
+                    text,
+                    start,
+                )),
+                range,
+            )
+        }
+        xml::Token::EntityDeclarationPublicExternalId {
             start,
-            end,
             name,
             public1,
             public2,
-        }) => Token::EntityDecl(
-            name.as_str(text, start),
-            EntityDefinition::ExternalId(to_test_external_id(
-                xml::ExternalId::Public(public1, public2),
-                text,
-                start,
-            )),
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::DtdEnd { start, end }) => Token::DtdEnd(start..start + end as usize),
-        Ok(xml::Token::ElementStart {
+            ..
+        } => {
+            let start = start as usize;
+            Token::EntityDecl(
+                name.as_str(text, start),
+                EntityDefinition::ExternalId(to_test_external_id(
+                    xml::ExternalId::Public(public1, public2),
+                    text,
+                    start,
+                )),
+                range,
+            )
+        }
+        xml::Token::DtdEnd { .. } => Token::DtdEnd(range),
+        xml::Token::ElementStart {
             start,
-            end,
             prefix,
             local,
-        }) => Token::ElementStart(
-            prefix.as_str(text, start),
-            local.as_str(text, start),
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::Attribute {
+        } => {
+            let start = start as usize;
+            Token::ElementStart(prefix.as_str(text, start), local.as_str(text, start), range)
+        }
+        xml::Token::Attribute {
             start,
-            end,
             prefix,
             local,
             value,
-        }) => Token::Attribute(
-            prefix.as_str(text, start),
-            local.as_str(text, start),
-            value.as_str(text, start),
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::ElementEnd { start, end, el_end }) => Token::ElementEnd(
-            match el_end {
-                xml::ElementEnd::Open => ElementEnd::Open,
-                xml::ElementEnd::Close(prefix, local) => {
-                    ElementEnd::Close(prefix.as_str(text, start), local.as_str(text, start))
-                }
-                xml::ElementEnd::Empty => ElementEnd::Empty,
-            },
-            start..start + end as usize,
-        ),
-        Ok(xml::Token::Text {
-            start,
-            end,
-            text: text_,
-        }) => Token::Text(text_.as_str(text, start), start..start + end as usize),
-        Ok(xml::Token::Cdata {
-            start,
-            end,
-            text: text_,
-        }) => Token::Cdata(text_.as_str(text, start), start..start + end as usize),
-        Err(ref e) => Token::Error(e.to_string()),
+        } => {
+            let start = start as usize;
+            Token::Attribute(
+                prefix.as_str(text, start),
+                local.as_str(text, start),
+                value.as_str(text, start),
+                range,
+            )
+        }
+        xml::Token::ElementEnd { start, el_end, .. } => {
+            let start = start as usize;
+            Token::ElementEnd(
+                match el_end {
+                    xml::ElementEnd::Open => ElementEnd::Open,
+                    xml::ElementEnd::Close(prefix, local) => {
+                        ElementEnd::Close(prefix.as_str(text, start), local.as_str(text, start))
+                    }
+                    xml::ElementEnd::Empty => ElementEnd::Empty,
+                },
+                range,
+            )
+        }
+        xml::Token::Text { start, text: text_ } => {
+            Token::Text(text_.as_str(text, start as usize), range)
+        }
+        xml::Token::Cdata { start, text: text_ } => {
+            Token::Cdata(text_.as_str(text, start as usize), range)
+        }
     }
 }
 

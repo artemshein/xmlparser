@@ -112,7 +112,9 @@ fn parse_fragment_1() {
     let mut p = xml::Tokenizer::from_fragment(s, 0..s.len());
 
     match p.next().unwrap().unwrap() {
-        xml::Token::ElementStart { start, local, .. } => assert_eq!(local.as_str(s, start), "p"),
+        xml::Token::ElementStart { start, local, .. } => {
+            assert_eq!(local.as_str(s, start as usize), "p")
+        }
         _ => panic!(),
     }
 
@@ -122,7 +124,9 @@ fn parse_fragment_1() {
     }
 
     match p.next().unwrap().unwrap() {
-        xml::Token::ElementStart { start, local, .. } => assert_eq!(local.as_str(s, start), "p"),
+        xml::Token::ElementStart { start, local, .. } => {
+            assert_eq!(local.as_str(s, start as usize), "p")
+        }
         _ => panic!(),
     }
 }

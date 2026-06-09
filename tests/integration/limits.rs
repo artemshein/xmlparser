@@ -23,7 +23,7 @@ fn attribute_under_64k_roundtrips() {
             _ => None,
         })
         .unwrap();
-    assert_eq!(attr.1.as_str(&xml, attr.0), value);
+    assert_eq!(attr.1.as_str(&xml, attr.0 as usize), value);
 }
 
 #[test]
@@ -49,10 +49,7 @@ fn pi_content_over_64k_is_an_error() {
 
 #[test]
 fn entity_value_over_64k_is_an_error() {
-    let xml = format!(
-        "<!DOCTYPE d [<!ENTITY e \"{}\">]><r/>",
-        "x".repeat(70_000)
-    );
+    let xml = format!("<!DOCTYPE d [<!ENTITY e \"{}\">]><r/>", "x".repeat(70_000));
     let has_err = tokens(&xml).into_iter().any(|t| t.is_err());
     assert!(has_err);
 }
@@ -69,7 +66,7 @@ fn text_over_64k_roundtrips() {
             _ => None,
         })
         .unwrap();
-    assert_eq!(text.1.as_str(&xml, text.0), body);
+    assert_eq!(text.1.as_str(&xml, text.0 as usize), body);
 }
 
 #[test]
@@ -83,7 +80,7 @@ fn comment_over_64k_roundtrips() {
             _ => None,
         })
         .unwrap();
-    assert_eq!(comment.1.as_str(&xml, comment.0), body);
+    assert_eq!(comment.1.as_str(&xml, comment.0 as usize), body);
 }
 
 #[test]
@@ -97,5 +94,5 @@ fn cdata_over_64k_roundtrips() {
             _ => None,
         })
         .unwrap();
-    assert_eq!(cdata.1.as_str(&xml, cdata.0), body);
+    assert_eq!(cdata.1.as_str(&xml, cdata.0 as usize), body);
 }

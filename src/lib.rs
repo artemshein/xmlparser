@@ -39,8 +39,9 @@ If you are looking for a higher level solution, check out
 - UTF-8 only.
 - Markup tokens (declaration, processing instruction, DOCTYPE, ENTITY,
   element start/end, attribute) are limited to 65535 bytes each;
-  text, CDATA and comment tokens to 4 GiB each. Longer tokens produce
-  a parsing error. This is the cost of the compact `Token` representation.
+  text, CDATA and comment tokens to 4 GiB each. Documents are limited
+  to 4 GiB. Anything longer produces a parsing error. This is the cost
+  of the compact `Token` representation.
 
 ## Safety
 
@@ -92,7 +93,7 @@ pub enum Token {
     /// ------------------------------------------------------- - span
     /// ```
     Declaration {
-        start: usize,
+        start: u32,
         version: SmallDetachedStrSpan,
         encoding: SmallDetachedStrSpan,
         standalone: Option<bool>,
@@ -108,7 +109,7 @@ pub enum Token {
     /// ------------------ - span
     /// ```
     ProcessingInstruction {
-        start: usize,
+        start: u32,
         end: u16,
         target: SmallDetachedStrSpan,
         content: SmallDetachedStrSpan,
@@ -121,11 +122,10 @@ pub enum Token {
     ///     ------    - text
     /// ------------- - span
     /// ```
-    Comment {
-        start: usize,
-        end: u32,
-        text: DetachedStrSpan,
-    },
+    ///
+    /// The token end is derivable: `text` end plus the `-->` terminator.
+    /// See [`Token::range`].
+    Comment { start: u32, text: DetachedStrSpan },
 
     /// DOCTYPE start token.
     ///
@@ -135,7 +135,7 @@ pub enum Token {
     /// --------------------------------------- - span
     /// ```
     DtdStartNoExternalId {
-        start: usize,
+        start: u32,
         end: u16,
         name: SmallDetachedStrSpan,
     },
@@ -149,7 +149,7 @@ pub enum Token {
     /// --------------------------------------- - span
     /// ```
     DtdStartSystemExternalId {
-        start: usize,
+        start: u32,
         end: u16,
         name: SmallDetachedStrSpan,
         external_id: SmallDetachedStrSpan,
@@ -164,7 +164,7 @@ pub enum Token {
     /// --------------------------------------- - span
     /// ```
     DtdStartPublicExternalId {
-        start: usize,
+        start: u32,
         end: u16,
         name: SmallDetachedStrSpan,
         public1: SmallDetachedStrSpan,
@@ -180,7 +180,7 @@ pub enum Token {
     /// -------------------------------------- - span
     /// ```
     EmptyDtdNoExternalId {
-        start: usize,
+        start: u32,
         end: u16,
         name: SmallDetachedStrSpan,
     },
@@ -194,7 +194,7 @@ pub enum Token {
     /// -------------------------------------- - span
     /// ```
     EmptyDtdSystemExternalId {
-        start: usize,
+        start: u32,
         end: u16,
         name: SmallDetachedStrSpan,
         external_id: SmallDetachedStrSpan,
@@ -209,7 +209,7 @@ pub enum Token {
     /// -------------------------------------- - span
     /// ```
     EmptyDtdPublicExternalId {
-        start: usize,
+        start: u32,
         end: u16,
         name: SmallDetachedStrSpan,
         public1: SmallDetachedStrSpan,
@@ -227,7 +227,7 @@ pub enum Token {
     /// ------------------------------------- - span
     /// ```
     EntityDeclarationEntityValue {
-        start: usize,
+        start: u32,
         end: u16,
         name: SmallDetachedStrSpan,
         entity_value: SmallDetachedStrSpan,
@@ -244,7 +244,7 @@ pub enum Token {
     /// ------------------------------------- - span
     /// ```
     EntityDeclarationSystemExternalId {
-        start: usize,
+        start: u32,
         end: u16,
         name: SmallDetachedStrSpan,
         external_id: SmallDetachedStrSpan,
@@ -261,7 +261,7 @@ pub enum Token {
     /// ------------------------------------- - span
     /// ```
     EntityDeclarationPublicExternalId {
-        start: usize,
+        start: u32,
         end: u16,
         name: SmallDetachedStrSpan,
         public1: SmallDetachedStrSpan,
@@ -276,7 +276,7 @@ pub enum Token {
     /// ]>
     /// -- - span
     /// ```
-    DtdEnd { start: usize, end: u16 },
+    DtdEnd { start: u32, end: u16 },
 
     /// Element start token.
     ///
@@ -286,9 +286,11 @@ pub enum Token {
     ///     ----                - local
     /// --------                - span
     /// ```
+    ///
+    /// The token end is derivable: it equals the `local` span end.
+    /// See [`Token::range`].
     ElementStart {
-        start: usize,
-        end: u16,
+        start: u32,
         prefix: SmallDetachedStrSpan,
         local: SmallDetachedStrSpan,
     },
@@ -302,9 +304,11 @@ pub enum Token {
     ///                -----  - value
     ///       --------------- - span
     /// ```
+    ///
+    /// The token end is derivable: `value` end plus the closing quote.
+    /// See [`Token::range`].
     Attribute {
-        start: usize,
-        end: u16,
+        start: u32,
         prefix: SmallDetachedStrSpan,
         local: SmallDetachedStrSpan,
         value: SmallDetachedStrSpan,
@@ -330,7 +334,7 @@ pub enum Token {
     ///         --              - span
     /// ```
     ElementEnd {
-        start: usize,
+        start: u32,
         end: u16,
         el_end: ElementEnd,
     },
@@ -346,12 +350,9 @@ pub enum Token {
     ///    ------     - text
     /// ```
     ///
-    /// The token span is equal to the `text`.
-    Text {
-        start: usize,
-        end: u32,
-        text: DetachedStrSpan,
-    },
+    /// The token span is equal to the `text`, so the token end is
+    /// derivable. See [`Token::range`].
+    Text { start: u32, text: DetachedStrSpan },
 
     /// CDATA token.
     ///
@@ -360,11 +361,43 @@ pub enum Token {
     ///             ----        - text
     ///    ----------------     - span
     /// ```
-    Cdata {
-        start: usize,
-        end: u32,
-        text: DetachedStrSpan,
-    },
+    ///
+    /// The token end is derivable: `text` end plus the `]]>` terminator.
+    /// See [`Token::range`].
+    Cdata { start: u32, text: DetachedStrSpan },
+}
+
+impl Token {
+    /// Returns the byte range of the token in the original document.
+    ///
+    /// Most tokens store an explicit end offset; for `ElementStart`,
+    /// `Attribute`, `Text`, `Comment` and `Cdata` the end is derived
+    /// from the last sub-span instead.
+    pub fn range(&self) -> core::ops::Range<usize> {
+        let (start, len) = match *self {
+            Token::Declaration { start, end, .. }
+            | Token::ProcessingInstruction { start, end, .. }
+            | Token::DtdStartNoExternalId { start, end, .. }
+            | Token::DtdStartSystemExternalId { start, end, .. }
+            | Token::DtdStartPublicExternalId { start, end, .. }
+            | Token::EmptyDtdNoExternalId { start, end, .. }
+            | Token::EmptyDtdSystemExternalId { start, end, .. }
+            | Token::EmptyDtdPublicExternalId { start, end, .. }
+            | Token::EntityDeclarationEntityValue { start, end, .. }
+            | Token::EntityDeclarationSystemExternalId { start, end, .. }
+            | Token::EntityDeclarationPublicExternalId { start, end, .. }
+            | Token::DtdEnd { start, end }
+            | Token::ElementEnd { start, end, .. } => (start, end as usize),
+            Token::ElementStart { start, local, .. } => (start, local.end() as usize),
+            Token::Attribute { start, value, .. } => (start, value.end() as usize + 1),
+            Token::Text { start, text } => (start, text.end() as usize),
+            Token::Comment { start, text } | Token::Cdata { start, text } => {
+                (start, text.end() as usize + 3)
+            }
+        };
+        let start = start as usize;
+        start..start + len
+    }
 }
 
 /// `ElementEnd` token.
@@ -397,29 +430,52 @@ pub enum EntityDefinition {
 type Result<T> = core::result::Result<T, Error>;
 type StreamResult<T> = core::result::Result<T, StreamError>;
 
-// Checked token length for tokens with `end: u16`.
+// Checked start offset and length for tokens with `end: u16`.
 //
-// Since every detached sub-span of a token lies within `start..s.pos()`,
-// a successful check here also guarantees that all `detach_small()` casts
-// for this token are lossless.
+// `start` is stored as `u32`, which limits documents to 4 GiB; if `s.pos()`
+// fits in `u32`, so does `start`. Since every detached sub-span of a token
+// lies within `start..s.pos()`, a successful length check here also
+// guarantees that all `detach_small()` casts for this token are lossless.
 #[inline]
-fn token_end16(s: &Stream, start: usize) -> StreamResult<u16> {
-    u16::try_from(s.pos() - start).map_err(|_| StreamError::TokenTooLong)
+fn small_token_parts(s: &Stream, start: usize) -> StreamResult<(u32, u16)> {
+    let len = s.pos() - start;
+    if s.pos() > u32::MAX as usize || len > u16::MAX as usize {
+        return Err(small_token_error(len));
+    }
+    Ok((start as u32, len as u16))
 }
 
-// Checked token length for tokens with `end: u32`. See `token_end16`.
+#[cold]
+fn small_token_error(len: usize) -> StreamError {
+    if len > u16::MAX as usize {
+        StreamError::TokenTooLong
+    } else {
+        StreamError::DocumentTooLarge
+    }
+}
+
+// Like `small_token_parts`, for variants that derive their end from a
+// sub-span instead of storing it.
 #[inline]
-fn token_end32(s: &Stream, start: usize) -> StreamResult<u32> {
-    u32::try_from(s.pos() - start).map_err(|_| StreamError::TokenTooLong)
+fn small_token_start(s: &Stream, start: usize) -> StreamResult<u32> {
+    small_token_parts(s, start).map(|(start, _)| start)
+}
+
+// Checked start offset for tokens with u32-based sub-spans (text, CDATA,
+// comments). If `s.pos()` fits in `u32`, both `start` and every sub-span
+// offset relative to it fit as well.
+#[inline]
+fn large_token_start(s: &Stream, start: usize) -> StreamResult<u32> {
+    if s.pos() > u32::MAX as usize {
+        return Err(StreamError::DocumentTooLarge);
+    }
+    Ok(start as u32)
 }
 
 // Checked `detach_small` for sub-spans that are detached before the total
 // token length is known (DOCTYPE external IDs, entity definitions).
 #[inline]
-fn detach_small_checked(
-    span: StrSpan<'_>,
-    start: usize,
-) -> StreamResult<SmallDetachedStrSpan> {
+fn detach_small_checked(span: StrSpan<'_>, start: usize) -> StreamResult<SmallDetachedStrSpan> {
     if span.end() - start > u16::MAX as usize {
         return Err(StreamError::TokenTooLong);
     }
@@ -512,9 +568,7 @@ impl<'a> Tokenizer<'a> {
                     match t {
                         Ok(Token::DtdStartNoExternalId { .. })
                         | Ok(Token::DtdStartSystemExternalId { .. })
-                        | Ok(Token::DtdStartPublicExternalId { .. }) => {
-                            self.state = State::Dtd
-                        }
+                        | Ok(Token::DtdStartPublicExternalId { .. }) => self.state = State::Dtd,
                         Ok(Token::EmptyDtdNoExternalId { .. })
                         | Ok(Token::EmptyDtdSystemExternalId { .. })
                         | Ok(Token::EmptyDtdPublicExternalId { .. }) => {
@@ -559,12 +613,11 @@ impl<'a> Tokenizer<'a> {
                         Ok(b'>') => {
                             self.state = State::AfterDtd;
                             s.advance(1);
-                            Some(match token_end16(s, start) {
-                                Ok(end) => Ok(Token::DtdEnd { start, end }),
-                                Err(e) => {
-                                    Err(Error::InvalidDoctype(e, s.gen_text_pos_from(start)))
-                                }
-                            })
+                            let t = small_token_parts(s, start)
+                                .map(|(start, end)| Token::DtdEnd { start, end });
+                            Some(
+                                t.map_err(|e| Error::InvalidDoctype(e, s.gen_text_pos_from(start))),
+                            )
                         }
                         Ok(c) => {
                             let e = StreamError::InvalidChar(c, b'>', s.gen_text_pos());
@@ -728,9 +781,9 @@ impl<'a> Tokenizer<'a> {
         s.skip_spaces();
         s.skip_string(b"?>")?;
 
-        let end = token_end16(s, start)?;
+        let (start32, end) = small_token_parts(s, start)?;
         Ok(Token::Declaration {
-            start,
+            start: start32,
             version: version.detach_small(start),
             encoding: encoding
                 .map(|e| e.detach_small(start))
@@ -821,10 +874,8 @@ impl<'a> Tokenizer<'a> {
         let text = s.slice_back(text_start);
         s.skip_string(b"-->")?;
 
-        let end = token_end32(s, start)?;
         Ok(Token::Comment {
-            start,
-            end,
+            start: large_token_start(s, start)?,
             text: text.detach(start),
         })
     }
@@ -849,9 +900,9 @@ impl<'a> Tokenizer<'a> {
 
         s.skip_string(b"?>")?;
 
-        let end = token_end16(s, start)?;
+        let (start32, end) = small_token_parts(s, start)?;
         Ok(Token::ProcessingInstruction {
-            start,
+            start: start32,
             end,
             target: target.detach_small(start),
             content: content
@@ -888,22 +939,22 @@ impl<'a> Tokenizer<'a> {
 
         s.advance(1);
 
-        let end = token_end16(s, start)?;
+        let (start32, end) = small_token_parts(s, start)?;
         if c == b'[' {
             Ok(match external_id {
                 None => Token::DtdStartNoExternalId {
-                    start,
+                    start: start32,
                     end,
                     name: name.detach_small(start),
                 },
                 Some(ExternalId::System(ext_id)) => Token::DtdStartSystemExternalId {
-                    start,
+                    start: start32,
                     end,
                     name: name.detach_small(start),
                     external_id: ext_id,
                 },
                 Some(ExternalId::Public(p1, p2)) => Token::DtdStartPublicExternalId {
-                    start,
+                    start: start32,
                     end,
                     name: name.detach_small(start),
                     public1: p1,
@@ -913,18 +964,18 @@ impl<'a> Tokenizer<'a> {
         } else {
             Ok(match external_id {
                 None => Token::EmptyDtdNoExternalId {
-                    start,
+                    start: start32,
                     end,
                     name: name.detach_small(start),
                 },
                 Some(ExternalId::System(ext_id)) => Token::EmptyDtdSystemExternalId {
-                    start,
+                    start: start32,
                     end,
                     name: name.detach_small(start),
                     external_id: ext_id,
                 },
                 Some(ExternalId::Public(p1, p2)) => Token::EmptyDtdPublicExternalId {
-                    start,
+                    start: start32,
                     end,
                     name: name.detach_small(start),
                     public1: p1,
@@ -994,17 +1045,17 @@ impl<'a> Tokenizer<'a> {
         s.skip_spaces();
         s.consume_byte(b'>')?;
 
-        let end = token_end16(s, start)?;
+        let (start32, end) = small_token_parts(s, start)?;
         Ok(match definition {
             EntityDefinition::EntityValue(entity_value) => Token::EntityDeclarationEntityValue {
-                start,
+                start: start32,
                 end,
                 name: name.detach_small(start),
                 entity_value,
             },
             EntityDefinition::ExternalId(ExternalId::System(ext_id)) => {
                 Token::EntityDeclarationSystemExternalId {
-                    start,
+                    start: start32,
                     end,
                     name: name.detach_small(start),
                     external_id: ext_id,
@@ -1012,7 +1063,7 @@ impl<'a> Tokenizer<'a> {
             }
             EntityDefinition::ExternalId(ExternalId::Public(p1, p2)) => {
                 Token::EntityDeclarationPublicExternalId {
-                    start,
+                    start: start32,
                     end,
                     name: name.detach_small(start),
                     public1: p1,
@@ -1088,10 +1139,8 @@ impl<'a> Tokenizer<'a> {
         s.advance(9);
         let text = s.consume_chars(|s, c| !(c == ']' && s.starts_with(b"]]>")))?;
         s.skip_string(b"]]>")?;
-        let end = token_end32(s, start)?;
         Ok(Token::Cdata {
-            start,
-            end,
+            start: large_token_start(s, start)?,
             text: text.detach(start),
         })
     }
@@ -1105,10 +1154,8 @@ impl<'a> Tokenizer<'a> {
         let start = s.pos();
         s.advance(1);
         let (prefix, local) = s.consume_qname()?;
-        let end = token_end16(s, start)?;
         Ok(Token::ElementStart {
-            start,
-            end,
+            start: small_token_start(s, start)?,
             prefix: prefix.detach_small(start),
             local: local.detach_small(start),
         })
@@ -1126,9 +1173,9 @@ impl<'a> Tokenizer<'a> {
         let (prefix, tag_name) = s.consume_qname()?;
         s.skip_spaces();
         s.consume_byte(b'>')?;
-        let end = token_end16(s, start)?;
+        let (start32, end) = small_token_parts(s, start)?;
         Ok(Token::ElementEnd {
-            start,
+            start: start32,
             end,
             el_end: ElementEnd::Close(prefix.detach_small(start), tag_name.detach_small(start)),
         })
@@ -1147,17 +1194,19 @@ impl<'a> Tokenizer<'a> {
                 b'/' => {
                     s.advance(1);
                     s.consume_byte(b'>')?;
+                    let (start, end) = small_token_parts(s, start)?;
                     return Ok(Token::ElementEnd {
                         start,
-                        end: token_end16(s, start)?,
+                        end,
                         el_end: ElementEnd::Empty,
                     });
                 }
                 b'>' => {
                     s.advance(1);
+                    let (start, end) = small_token_parts(s, start)?;
                     return Ok(Token::ElementEnd {
                         start,
-                        end: token_end16(s, start)?,
+                        end,
                         el_end: ElementEnd::Open,
                     });
                 }
@@ -1187,10 +1236,8 @@ impl<'a> Tokenizer<'a> {
         let value = s.slice_back(value_start);
         s.consume_byte(quote)?;
 
-        let end = token_end16(s, start)?;
         Ok(Token::Attribute {
-            start,
-            end,
+            start: small_token_start(s, start)?,
             prefix: prefix.detach_small(start),
             local: local.detach_small(start),
             value: value.detach_small(start),
@@ -1208,10 +1255,8 @@ impl<'a> Tokenizer<'a> {
         s.skip_text_content()?;
         let text = s.slice_back(start);
 
-        let end = token_end32(s, start)?;
         Ok(Token::Text {
-            start,
-            end,
+            start: large_token_start(s, start)?,
             text: text.detach(start),
         })
     }

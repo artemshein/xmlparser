@@ -150,6 +150,12 @@ pub enum StreamError {
     /// attribute) are limited to 65535 bytes each.
     /// Text, CDATA and comment tokens are limited to 4 GiB each.
     TokenTooLong,
+
+    /// The document is too large for the compact `Token` representation.
+    ///
+    /// Token start offsets are stored as `u32`, so documents are limited
+    /// to 4 GiB.
+    DocumentTooLarge,
 }
 
 impl fmt::Display for StreamError {
@@ -209,6 +215,9 @@ impl fmt::Display for StreamError {
             }
             StreamError::TokenTooLong => {
                 write!(f, "token is too long")
+            }
+            StreamError::DocumentTooLarge => {
+                write!(f, "documents larger than 4 GiB are not supported")
             }
         }
     }
