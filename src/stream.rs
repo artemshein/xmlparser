@@ -246,12 +246,15 @@ impl<'a> Stream<'a> {
     }
 
     /// Skips bytes by the predicate.
+    #[inline]
     pub fn skip_bytes<F>(&mut self, f: F)
     where
         F: Fn(&Stream, u8) -> bool,
     {
-        while !self.at_end() && f(self, self.curr_byte_unchecked()) {
-            self.advance(1);
+        let bytes = self.span.as_bytes();
+        let end = self.end;
+        while self.pos < end && f(self, bytes[self.pos]) {
+            self.pos += 1;
         }
     }
 
@@ -274,16 +277,34 @@ impl<'a> Stream<'a> {
     where
         F: Fn(&Stream, char) -> bool,
     {
-        for c in self.chars() {
-            if !c.is_xml_char() {
-                return Err(StreamError::NonXmlChar(c, self.gen_text_pos()));
-            } else if f(self, c) {
-                self.advance(c.len_utf8());
+        let bytes = self.span.as_bytes();
+        let end = self.end;
+        while self.pos < end {
+            let b = bytes[self.pos];
+            if b < 128 {
+                let c = b as char;
+                if !c.is_xml_char() {
+                    return Err(StreamError::NonXmlChar(c, self.gen_text_pos()));
+                }
+                if f(self, c) {
+                    self.pos += 1;
+                } else {
+                    break;
+                }
             } else {
+                for c in self.span.as_str()[self.pos..end].chars() {
+                    if !c.is_xml_char() {
+                        return Err(StreamError::NonXmlChar(c, self.gen_text_pos()));
+                    }
+                    if f(self, c) {
+                        self.pos += c.len_utf8();
+                    } else {
+                        return Ok(());
+                    }
+                }
                 break;
             }
         }
-
         Ok(())
     }
 
@@ -309,15 +330,17 @@ impl<'a> Stream<'a> {
     /// Accepted values: `' ' \n \r \t`.
     #[inline]
     pub fn skip_spaces(&mut self) {
-        while !self.at_end() && self.curr_byte_unchecked().is_xml_space() {
-            self.advance(1);
+        let bytes = self.span.as_bytes();
+        let end = self.end;
+        while self.pos < end && bytes[self.pos].is_xml_space() {
+            self.pos += 1;
         }
     }
 
     /// Checks if the stream is starts with a space.
     #[inline]
     pub fn starts_with_space(&self) -> bool {
-        !self.at_end() && self.curr_byte_unchecked().is_xml_space()
+        self.pos < self.end && self.span.as_bytes()[self.pos].is_xml_space()
     }
 
     /// Consumes whitespaces.
@@ -424,6 +447,7 @@ impl<'a> Stream<'a> {
     ///
     /// - `InvalidName` - if name is empty or starts with an invalid char
     /// - `UnexpectedEndOfStream`
+    #[inline]
     pub fn consume_name(&mut self) -> Result<StrSpan<'a>> {
         let start = self.pos();
         self.skip_name()?;
@@ -473,32 +497,31 @@ impl<'a> Stream<'a> {
     /// - `InvalidName` - if name is empty or starts with an invalid char
     #[inline(never)]
     pub fn consume_qname(&mut self) -> Result<(StrSpan<'a>, StrSpan<'a>)> {
-        let start = self.pos();
+        let start = self.pos;
 
         let mut splitter = None;
+        let bytes = self.span.as_bytes();
+        let end = self.end;
 
-        while !self.at_end() {
-            // Check for ASCII first for performance reasons.
-            let b = self.curr_byte_unchecked();
+        while self.pos < end {
+            let b = bytes[self.pos];
             if b < 128 {
                 if b == b':' {
                     if splitter.is_none() {
-                        splitter = Some(self.pos());
-                        self.advance(1);
+                        splitter = Some(self.pos);
+                        self.pos += 1;
                     } else {
-                        // Multiple `:` is an error.
                         return Err(StreamError::InvalidName);
                     }
                 } else if b.is_xml_name() {
-                    self.advance(1);
+                    self.pos += 1;
                 } else {
                     break;
                 }
             } else {
-                // Fallback to Unicode code point.
-                match self.chars().nth(0) {
+                match self.span.as_str()[self.pos..].chars().next() {
                     Some(c) if c.is_xml_name() => {
-                        self.advance(c.len_utf8());
+                        self.pos += c.len_utf8();
                     }
                     _ => break,
                 }

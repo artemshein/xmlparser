@@ -2,8 +2,8 @@
 name = "xmlparser"
 version = "0.13.6"
 authors = ["Yevhenii Reizner <razrfalcon@gmail.com>"]
-edition = "2018"
-rust-version = "1.66"
+edition = "2024"
+rust-version = "1.85"
 description = "Pull-based, zero-allocation XML parser."
 documentation = "https://docs.rs/xmlparser"
 readme = "README.md"
