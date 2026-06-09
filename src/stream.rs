@@ -172,6 +172,9 @@ impl<'a> Stream<'a> {
 
     /// Advances by `n` bytes.
     ///
+    /// Advancing past the end is checked only by a `debug_assert!`;
+    /// accessing the stream afterwards will panic on the out-of-bounds read.
+    ///
     /// # Examples
     ///
     /// ```rust,should_panic
@@ -179,7 +182,8 @@ impl<'a> Stream<'a> {
     ///
     /// let mut s = Stream::from("text");
     /// s.advance(2); // ok
-    /// s.advance(20); // will cause a panic via debug_assert!().
+    /// s.advance(20); // past the end; panics via debug_assert!() in debug builds
+    /// s.curr_byte_unchecked(); // panics: index out of bounds
     /// ```
     #[inline]
     pub fn advance(&mut self, n: usize) {
